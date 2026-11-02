@@ -65,6 +65,8 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 3 | 2026-11-02 | Requirements tracked in this file, updated per change. |
 | 4 | 2026-11-02 | Stage 1 (auto-entities + glance feasibility) runs before the card is written. |
 | 5 | 2026-11-02 | Test dashboard `home-test` contains the Home view only. |
+| 6 | 2026-11-02 | One card per top-level category (Energy & Power, Appliances, Car, Doors & Windows, …), replacing heading + chip row. |
+| 7 | 2026-11-02 | Comparison layout: new section on `home-test` holds the category cards beside the original section. |
 
 ## 7. Open questions
 
@@ -77,3 +79,6 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 
 - 2026-11-02 — file created from the plan agreed in session (goal, scope,
   non-goals, decisions 1–5, open questions).
+- 2026-11-02 — decisions 6–7 added (one card per top-level category; comparison
+  section on `/home-test`); Stage 1 feasibility prototype confirmed working
+  (Jinja labels + per-cell filtering via `auto-entities` template filter).
