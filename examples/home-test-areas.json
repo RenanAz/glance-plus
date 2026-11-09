@@ -1,0 +1,279 @@
+[
+  {
+    "type": "custom:hierarchy-areas",
+    "title": "1º Andar",
+    "icon": "mdi:home-floor-1",
+    "grid_options": { "columns": 12 },
+    "areas": [
+      {
+        "name": "Sala",
+        "icon": "mdi:sofa-outline",
+        "accent": "#fb7185",
+        "plates": [
+          {
+            "name": "Triplo · Lareira",
+            "rockers": [
+              { "entity": "switch.aqara_triplo_0_left", "name": "Spot Lareira" },
+              {
+                "entity": "switch.aqara_triplo_0_center",
+                "name": "Sanca cortineiro",
+                "downstream": [{ "entity": "light.sala_triplo_0_center", "name": "Sanca LED" }]
+              },
+              { "entity": "switch.aqara_triplo_0_right", "name": "Spot TV" }
+            ]
+          },
+          {
+            "name": "Triplo · Janela",
+            "rockers": [
+              { "entity": "switch.aqara_triplo_1_left", "name": "Esq" },
+              { "entity": "switch.aqara_triplo_1_center", "name": "Centro" },
+              { "entity": "switch.aqara_triplo_1_right", "name": "Dir" }
+            ]
+          },
+          {
+            "name": "Duplo · Sanca",
+            "rockers": [
+              { "entity": "switch.aqara_duplo_sala_1_left", "name": "Esq" },
+              { "entity": "switch.aqara_duplo_sala_1_right", "name": "Dir" }
+            ]
+          },
+          {
+            "name": "Duplo · TV",
+            "rockers": [
+              { "entity": "switch.aqara_duplo_sala_2_left", "name": "Esq" },
+              { "entity": "switch.aqara_duplo_sala_2_right", "name": "Dir" }
+            ]
+          }
+        ],
+        "devices": [
+          { "entity": "light.led_strip_rgbw_1", "name": "LED Strip 1" },
+          { "entity": "light.led_white_2", "name": "LED Branca 2" },
+          { "entity": "light.led_white_3", "name": "LED Branca 3" },
+          { "entity": "light.leds_sanca_cortineiro", "name": "Sanca cortineiro" }
+        ]
+      },
+      {
+        "name": "Cozinha",
+        "icon": "mdi:fridge-outline",
+        "accent": "#34d399",
+        "plates": [
+          {
+            "name": "Cozinha principal",
+            "rockers": [
+              {
+                "entity": "switch.switch_cozinha_principal_left",
+                "name": "Luz teto",
+                "downstream": [{ "entity": "light.switch_cozinha_principal_left", "name": "Teto" }]
+              },
+              {
+                "entity": "switch.switch_cozinha_principal_right",
+                "name": "Leds",
+                "downstream": [{ "entity": "light.switch_cozinha_principal_right", "name": "Leds" }]
+              }
+            ]
+          }
+        ],
+        "devices": [
+          { "entity": "switch.leds_cozinha_lora1", "name": "Leds cozinha" },
+          { "entity": "light.kitchen_gunnarp", "name": "Gunnarp" }
+        ]
+      },
+      {
+        "name": "Quarto Casal",
+        "icon": "mdi:bed-king",
+        "accent": "#a78bfa",
+        "plates": [
+          {
+            "name": "Interruptor Casal",
+            "rockers": [
+              { "entity": "switch.aqara_duplo_casal_left", "name": "Esq" },
+              {
+                "entity": "switch.aqara_duplo_casal_right",
+                "name": "Dir",
+                "downstream": [{ "entity": "light.interruptor_casal_right", "name": "Luz do quarto" }]
+              }
+            ]
+          },
+          {
+            "name": "Lidl · 3 gang",
+            "rockers": [
+              { "entity": "switch.lidl_3_l1", "name": "Aquecedor" },
+              { "entity": "switch.lidl_3_l2", "name": "Tapete" },
+              { "entity": "switch.lidl_3_l3", "name": "Cabeceira" }
+            ]
+          }
+        ],
+        "devices": [
+          { "entity": "light.bulb_03", "name": "Bulb 03" },
+          { "entity": "light.lampada_cabeceira", "name": "Cabeceira" }
+        ]
+      },
+      {
+        "name": "Quarto 2",
+        "icon": "mdi:face-woman-profile",
+        "accent": "#38bdf8",
+        "plates": [
+          {
+            "name": "Interruptor Quarto 2",
+            "rockers": [
+              { "entity": "switch.aqara_duplo_quarto2_left", "name": "Esq" },
+              {
+                "entity": "switch.aqara_duplo_quarto2_right",
+                "name": "Dir",
+                "downstream": [{ "entity": "light.interruptor_quarto2_right", "name": "Luz Quarto 2" }]
+              }
+            ]
+          }
+        ],
+        "devices": [
+          { "entity": "switch.lidl_switch_01", "name": "Lidl" },
+          { "entity": "light.lampofficelight", "name": "Lamp Quarto 2" }
+        ]
+      },
+      {
+        "name": "Corredor",
+        "icon": "mdi:coat-rack",
+        "accent": "#2dd4bf",
+        "devices": [{ "entity": "light.bulb_04", "name": "Bulb 04" }]
+      },
+      {
+        "name": "Banheiro Casal",
+        "icon": "mdi:shower",
+        "accent": "#818cf8",
+        "plates": [
+          {
+            "rockers": [
+              {
+                "entity": "switch.banheiro_casal",
+                "name": "Luz banheiro",
+                "downstream": [{ "entity": "light.banheiro_casal", "name": "Luz" }]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Banheiro 2",
+        "icon": "mdi:shower",
+        "accent": "#e879f9",
+        "plates": [{ "rockers": [{ "entity": "switch.banheiro_quarto2", "name": "Luz banheiro" }] }]
+      }
+    ]
+  },
+  {
+    "type": "custom:hierarchy-areas",
+    "title": "Térreo",
+    "icon": "mdi:home-floor-0",
+    "grid_options": { "columns": 12 },
+    "areas": [
+      {
+        "name": "Hall de entrada",
+        "icon": "mdi:door",
+        "accent": "#818cf8",
+        "plates": [
+          {
+            "name": "Hall",
+            "rockers": [
+              { "entity": "switch.hall_left", "name": "Esq" },
+              { "entity": "switch.hall_right", "name": "Externa" }
+            ]
+          }
+        ],
+        "devices": [{ "entity": "light.plug_hall", "name": "Plug hall" }]
+      },
+      {
+        "name": "Garagem",
+        "icon": "mdi:garage-variant",
+        "accent": "#fbbf24",
+        "plates": [
+          {
+            "name": "Garagem",
+            "rockers": [
+              {
+                "entity": "switch.garage_left",
+                "name": "Esq",
+                "downstream": [{ "entity": "light.garage_left", "name": "Luz esq" }]
+              },
+              {
+                "entity": "switch.garage_right",
+                "name": "Dir",
+                "downstream": [{ "entity": "light.garage_right", "name": "Luz dir" }]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Banheiro Térreo",
+        "icon": "mdi:shower",
+        "accent": "#2dd4bf",
+        "plates": [
+          { "rockers": [{ "entity": "switch.banheiro_terreo", "name": "Luz banheiro" }] }
+        ]
+      },
+      {
+        "name": "Escritório B",
+        "icon": "mdi:face-woman-shimmer",
+        "accent": "#fb7185",
+        "plates": [
+          {
+            "name": "Sala RC · Porta",
+            "rockers": [
+              {
+                "entity": "switch.sala_terreo_porta_left",
+                "name": "Esq",
+                "downstream": [{ "entity": "light.sala_terreo_porta_left", "name": "Luz esq" }]
+              },
+              {
+                "entity": "switch.sala_terreo_porta_right",
+                "name": "Dir",
+                "downstream": [{ "entity": "light.sala_terreo_porta_right", "name": "Luz dir" }]
+              }
+            ]
+          },
+          {
+            "name": "Sala RC · Sanca",
+            "rockers": [
+              { "entity": "switch.sala_terreo_sanca_left", "name": "Esq" },
+              { "entity": "switch.sala_terreo_sanca_right", "name": "Dir" }
+            ]
+          }
+        ],
+        "devices": [{ "entity": "light.ikea_white", "name": "IKEA White" }]
+      },
+      {
+        "name": "Exterior",
+        "icon": "mdi:tree",
+        "accent": "#34d399",
+        "devices": [
+          { "entity": "light.lora_portao", "name": "Luzes portão" },
+          { "entity": "light.reolink_portao_floodlight", "name": "Floodlight" },
+          { "entity": "switch.regador", "name": "Regador" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "custom:hierarchy-areas",
+    "title": "2º Andar",
+    "icon": "mdi:home-floor-2",
+    "grid_options": { "columns": 12 },
+    "areas": [
+      {
+        "name": "Escritório A",
+        "icon": "mdi:office-building",
+        "accent": "#38bdf8",
+        "devices": [
+          { "entity": "light.bulb01", "name": "Lampada Office" },
+          { "entity": "light.snapmaker_u1_led_cavity_led", "name": "Snapmaker LED" }
+        ]
+      },
+      {
+        "name": "Sotão",
+        "icon": "mdi:home-roof",
+        "accent": "#a78bfa",
+        "devices": [{ "entity": "switch.sotao_sotao_light", "name": "Luz AC" }]
+      }
+    ]
+  }
+]

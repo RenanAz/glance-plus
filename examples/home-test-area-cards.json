@@ -1,0 +1,746 @@
+[
+ {
+  "type": "heading",
+  "heading": "Térreo",
+  "icon": "mdi:home-floor-0",
+  "heading_style": "title",
+  "tap_action": {
+   "action": "perform-action",
+   "perform_action": "input_boolean.toggle",
+   "target": {
+    "entity_id": "input_boolean.show_lights_r_c"
+   }
+  }
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Hall de entrada",
+  "icon": "mdi:door",
+  "accent": "#818cf8",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.hall_left",
+    "name": "Esq",
+    "group": "Hall"
+   },
+   {
+    "entity": "switch.hall_right",
+    "name": "Externa",
+    "group": "Hall"
+   },
+   {
+    "entity": "light.plug_hall",
+    "name": "Plug hall"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_r_c",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_r_c",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.hall_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.hall_right",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Garagem",
+  "icon": "mdi:garage-variant",
+  "accent": "#fbbf24",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.garage_left",
+    "name": "Esq",
+    "group": "Garagem",
+    "downstream": [
+     {
+      "entity": "light.garage_left",
+      "name": "Luz esq"
+     }
+    ]
+   },
+   {
+    "entity": "switch.garage_right",
+    "name": "Dir",
+    "group": "Garagem",
+    "downstream": [
+     {
+      "entity": "light.garage_right",
+      "name": "Luz dir"
+     }
+    ]
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_r_c",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_r_c",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.garage_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.garage_right",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Banheiro Térreo",
+  "icon": "mdi:shower",
+  "accent": "#2dd4bf",
+  "columns": 2,
+  "controls": [
+   {
+    "entity": "switch.banheiro_terreo",
+    "name": "Luz banheiro"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_r_c",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_r_c",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.banheiro_terreo",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Escritório B",
+  "icon": "mdi:face-woman-shimmer",
+  "accent": "#fb7185",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.sala_terreo_porta_left",
+    "name": "Esq",
+    "group": "Sala RC · Porta",
+    "downstream": [
+     {
+      "entity": "light.sala_terreo_porta_left",
+      "name": "Luz esq"
+     }
+    ]
+   },
+   {
+    "entity": "switch.sala_terreo_porta_right",
+    "name": "Dir",
+    "group": "Sala RC · Porta",
+    "downstream": [
+     {
+      "entity": "light.sala_terreo_porta_right",
+      "name": "Luz dir"
+     }
+    ]
+   },
+   {
+    "entity": "switch.sala_terreo_sanca_left",
+    "name": "Esq",
+    "group": "Sala RC · Sanca"
+   },
+   {
+    "entity": "switch.sala_terreo_sanca_right",
+    "name": "Dir",
+    "group": "Sala RC · Sanca",
+    "downstream": [
+     {
+      "entity": "light.ikea_white"
+     }
+    ]
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_r_c",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_r_c",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.sala_terreo_porta_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.sala_terreo_porta_right",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.sala_terreo_sanca_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.sala_terreo_sanca_right",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Exterior",
+  "icon": "mdi:tree",
+  "accent": "#34d399",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "light.lora_portao",
+    "name": "Luzes portão"
+   },
+   {
+    "entity": "light.reolink_portao_floodlight",
+    "name": "Floodlight"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_r_c",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_r_c",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "light.lora_portao",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "light.reolink_portao_floodlight",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "heading",
+  "heading": "1º Andar",
+  "icon": "mdi:home-floor-1",
+  "heading_style": "title",
+  "tap_action": {
+   "action": "perform-action",
+   "perform_action": "input_boolean.toggle",
+   "target": {
+    "entity_id": "input_boolean.show_lights_1st_floor"
+   }
+  }
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Sala",
+  "icon": "mdi:sofa-outline",
+  "accent": "#fb7185",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.aqara_triplo_0_left",
+    "name": "TV / Lareira",
+    "group": "Spots",
+    "icon": "mdi:lightbulb-spot"
+   },
+   {
+    "entity": "switch.aqara_triplo_1_left",
+    "name": "Triplos",
+    "group": "Spots",
+    "icon": "mdi:lightbulb-spot"
+   },
+   {
+    "entity": "switch.aqara_duplo_sala_1_left",
+    "name": "Porta Coz.",
+    "icon": "mdi:lightbulb-spot",
+    "group": "Spots"
+   },
+   {
+    "entity": "switch.aqara_triplo_0_center",
+    "name": "Sanca",
+    "group": "Rasgo e Sanca",
+    "downstream": [
+     {
+      "entity": "light.led_white_3",
+      "name": "Cortineiro"
+     },
+     {
+      "entity": "light.leds_sanca_cortineiro",
+      "name": "Sanca"
+     }
+    ],
+    "icon": "mdi:led-strip"
+   },
+   {
+    "entity": "switch.aqara_triplo_1_center",
+    "name": "Rasgo de Luz",
+    "group": "Rasgo e Sanca",
+    "icon": "mdi:led-strip",
+    "downstream": [
+     {
+      "entity": "light.led_white_2",
+      "name": "Forte"
+     },
+     {
+      "entity": "light.led_strip_rgbw_1",
+      "name": "Cor"
+     }
+    ]
+   }
+  ],
+  "grid_options": {
+   "columns": 12,
+   "rows": "auto"
+  },
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "hide_name_on": true,
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_triplo_0_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_triplo_1_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_duplo_sala_1_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_triplo_0_center",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_triplo_1_center",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Cozinha",
+  "icon": "mdi:fridge-outline",
+  "accent": "#34d399",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.switch_cozinha_principal_left",
+    "name": "Luz teto",
+    "downstream": [
+     {
+      "entity": "light.kitchen_gunnarp",
+      "name": "Teto"
+     }
+    ]
+   },
+   {
+    "entity": "switch.switch_cozinha_principal_right",
+    "name": "Leds",
+    "downstream": [
+     {
+      "entity": "switch.leds_cozinha_lora1"
+     }
+    ]
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.switch_cozinha_principal_left",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.switch_cozinha_principal_right",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Quarto Casal",
+  "icon": "mdi:bed-king",
+  "accent": "#a78bfa",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.aqara_duplo_casal_right",
+    "name": "Forte",
+    "group": "Luzes",
+    "downstream": [
+     {
+      "entity": "light.bulb_03",
+      "name": "Forte"
+     }
+    ]
+   },
+   {
+    "entity": "switch.lidl_3_l3",
+    "name": "Cabeceira",
+    "group": "Luzes",
+    "downstream": [
+     {
+      "entity": "light.lampada_cabeceira",
+      "name": "Cabeceira"
+     }
+    ]
+   },
+   {
+    "entity": "switch.lidl_3_l1",
+    "hold": false,
+    "name": "Cama Aquecida",
+    "group": "Régua"
+   },
+   {
+    "entity": "switch.lidl_3_l2",
+    "group": "Régua",
+    "name": "Meio",
+    "hold": false
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_duplo_casal_right",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.lidl_3_l3",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Quarto 2",
+  "icon": "mdi:face-woman-profile",
+  "accent": "#38bdf8",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "switch.aqara_duplo_quarto2_right",
+    "name": "Luz",
+    "downstream": [
+     {
+      "entity": "light.lampofficelight",
+      "name": "Lâmpada"
+     }
+    ],
+    "group": "Interruptor"
+   },
+   {
+    "entity": "switch.lidl_switch_01",
+    "name": "Cama Aquecida",
+    "group": "Cama",
+    "hold": false
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.aqara_duplo_quarto2_right",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Corredor",
+  "icon": "mdi:coat-rack",
+  "accent": "#2dd4bf",
+  "columns": 2,
+  "controls": [
+   {
+    "entity": "light.bulb_04",
+    "name": "Luz do Corredor"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "light.bulb_04",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Banheiro Casal",
+  "icon": "mdi:shower",
+  "accent": "#818cf8",
+  "columns": 2,
+  "controls": [
+   {
+    "entity": "switch.banheiro_casal",
+    "name": "Luz banheiro"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.banheiro_casal",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Banheiro 2",
+  "icon": "mdi:shower",
+  "accent": "#e879f9",
+  "columns": 2,
+  "controls": [
+   {
+    "entity": "switch.banheiro_quarto2",
+    "name": "Luz banheiro"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_1st_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_1st_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.banheiro_quarto2",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "heading",
+  "heading": "2º Andar",
+  "icon": "mdi:home-floor-2",
+  "heading_style": "title",
+  "tap_action": {
+   "action": "perform-action",
+   "perform_action": "input_boolean.toggle",
+   "target": {
+    "entity_id": "input_boolean.show_lights_2nd_floor"
+   }
+  }
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Escritório A",
+  "icon": "mdi:office-building",
+  "accent": "#38bdf8",
+  "columns": 3,
+  "controls": [
+   {
+    "entity": "light.bulb01",
+    "name": "Lampada Office"
+   },
+   {
+    "entity": "light.snapmaker_u1_led_cavity_led",
+    "name": "Snapmaker LED"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_2nd_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_2nd_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "light.bulb01",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "light.snapmaker_u1_led_cavity_led",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "type": "custom:hierarchy-area",
+  "name": "Sotão",
+  "icon": "mdi:home-roof",
+  "accent": "#a78bfa",
+  "columns": 2,
+  "controls": [
+   {
+    "entity": "switch.sotao_sotao_light",
+    "name": "Luz AC"
+   }
+  ],
+  "show_helper": "input_boolean.show_lights_2nd_floor",
+  "header_style": "title",
+  "release_helper": false,
+  "visibility": [
+   {
+    "condition": "or",
+    "conditions": [
+     {
+      "condition": "state",
+      "entity": "input_boolean.show_lights_2nd_floor",
+      "state": "on"
+     },
+     {
+      "condition": "state",
+      "entity": "switch.sotao_sotao_light",
+      "state": "on"
+     }
+    ]
+   }
+  ]
+ }
+]

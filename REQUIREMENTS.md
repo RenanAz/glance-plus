@@ -3,7 +3,9 @@
 Living document. Append a row to **Decisions** and to **Changelog** whenever a
 requirement changes; do not rewrite history.
 
-Status: pre-implementation (Stage 1 feasibility test running on `/home-test`).
+Status: v1 card written and running live on `/home-test` (section 1), awaiting
+user verdict. Stage 1 (glance + auto-entities) confirmed the limits that justify
+the card.
 
 ## 1. Goal
 
@@ -67,13 +69,25 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 5 | 2026-11-02 | Test dashboard `home-test` contains the Home view only. |
 | 6 | 2026-11-02 | One card per top-level category (Energy & Power, Appliances, Car, Doors & Windows, …), replacing heading + chip row. |
 | 7 | 2026-11-02 | Comparison layout: new section on `home-test` holds the category cards beside the original section. |
+| 8 | 2026-11-02 | Card-level `show_if` added: the whole card (header included) hides when nothing is worth showing, not only the cell grid. |
+| 9 | 2026-11-02 | Header is the expand control: clicking toggles `toggle_entity` (`homeassistant.toggle`); chevron shows the helper state. Replaces the separate `show_*` chip row per category. |
+| 10 | 2026-11-02 | `name` is the only cell text field (Jinja). No name → formatted state. `color` paints the icon only, matching the chips. |
+| 11 | 2026-11-02 | `show_if` is Jinja-only. Native condition objects deferred: they cannot be evaluated in the batched Jinja render without a JS-side evaluator. |
+| 12 | 2026-11-02 | Deferred to v2: visual editor. YAML for now; the HA YAML editor still works from the UI. |
+| 13 | 2026-11-02 | Cells are omitted, not space-reserved, when hidden: columns stay fixed, positions compact. Revisit if the shifting looks jumpy. |
+| 14 | 2026-11-02 | Supersedes 8: the header always renders and `show_if` gates the grid only, so the expand arrow is always reachable. |
+| 15 | 2026-11-02 | `blocks` inside a card: optional label/icon, own `columns`, and `color`/`background`/`show_if` defaults for its cells. Rendered in config order; an empty block is skipped with its label. |
+| 16 | 2026-11-02 | Supersedes 12: visual editor shipped as `glance-plus-editor` in the same module — card options, cells, blocks, colour swatches, entity/icon pickers. |
+| 17 | 2026-11-02 | Cell text takes `\n` as line breaks; title defaults to left-aligned. |
 
 ## 7. Open questions
 
 1. Card name: `glance-plus` (current working name) confirmed?
-2. Per-cell `span` in v1, or defer?
+2. ~~Per-cell `span` in v1, or defer?~~ In v1 (`span: N`).
 3. Do we need a second layout mode (dense list vs tile grid) or is one grid enough?
 4. Where should card-level defaults live — card config only, or also a theme variable?
+5. Does the card replace the category chip rows + headings on the live dashboard,
+   or coexist with them for a while?
 
 ## 8. Changelog
 
@@ -82,3 +96,26 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 - 2026-11-02 — decisions 6–7 added (one card per top-level category; comparison
   section on `/home-test`); Stage 1 feasibility prototype confirmed working
   (Jinja labels + per-cell filtering via `auto-entities` template filter).
+- 2026-11-02 — v1 card implemented (`src/glance-plus.js`): fixed grid, one batched
+  `render_template` call, Jinja title/name/icon/colour/background/show_if, header
+  click toggles `toggle_entity`, card-level `show_if`, error badge keeps the last
+  good render. Deployed as inline resource
+  `7bb0f762cab94e569fefd78ebe203a46` and used for the four category cards in
+  `home-test` section 1 (decisions 8–13).
+- 2026-11-02 — bugfix: HA 2026 `render_template` is a subscription — the command
+  acks `result: null` and the render comes as an `event` (`{result, listeners}`
+  or `{error}`). `_renderOnce` now subscribes via
+  `hass.connection.subscribeMessage`, takes the first event and unsubscribes;
+  the old request/response path stays as a fallback for older cores.
+- 2026-11-02 — header always renders (grid-only gating); `hide_when_empty` removed
+  because an empty card must still offer its expand arrow. Cell text defaults to
+  12px (`font_size`), icons 16px (`icon_size`), cell height 32px. `blocks` added:
+  each block has its own optional label, columns and colour/background defaults for
+  its cells; blocks render in config order. Doors & Windows card split into
+  `Doors` (red) then `Windows` (yellow).
+- 2026-11-02 — cell text supports line breaks (`\n` → one ellipsised line each,
+  cell grows to `min-height`); title defaults to left-aligned; visual editor
+  shipped (`glance-plus-editor`): card options, per-cell fields with
+  entity/icon pickers and colour swatches, blocks with add/delete/reorder,
+  group-into-blocks and flatten. A config with neither `cells` nor `blocks` is
+  now an empty card instead of a config error.
