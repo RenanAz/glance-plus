@@ -169,7 +169,7 @@ if (calls[0].service !== "turn_off") throw new Error("master on -> turn_off");
 console.log("ok: hierarchy-area self-check passed");
 
 
-// show_helper: forced open only while idle; collapsing always releases it.
+// show_helper: opens the card; tapping only collapses it, never releases the helper.
 {
   const c = new ctx.HierarchyAreaCard();
   c.setConfig({
@@ -185,11 +185,6 @@ console.log("ok: hierarchy-area self-check passed");
     },
     callService(d, s, data) {
       calls.push({ d, s, id: data.entity_id });
-      const st = hass.states[data.entity_id];
-      if (!st) return;
-      st.state = s === "turn_off" ? "off" : s === "turn_on" ? "on" : st.state === "on" ? "off" : "on";
-      c._sig = "";
-      c.hass = hass;
     },
   };
   c.hass = hass;
@@ -199,30 +194,23 @@ console.log("ok: hierarchy-area self-check passed");
   c.hass.states["input_boolean.show_x"].state = "on";
   c._sig = "";
   c.hass = hass;
-  if (!hasTile()) throw new Error("chip summon must expand the card");
+  if (!hasTile()) throw new Error("helper on must expand the card");
 
-  // Collapsing an idle summoned card releases the helper.
+  // Collapsing under a helper closes this card and leaves the helper alone.
   calls.length = 0;
   c._click({ target: { closest: (s) => (s === "[data-open]" ? {} : null) } });
-  if (calls[0].s !== "turn_off" || calls[0].id !== "input_boolean.show_x") {
-    throw new Error("collapse must turn the helper off");
-  }
+  if (calls.some((x) => x.s === "turn_off")) throw new Error("shared helper must not be released");
   if (hasTile()) throw new Error("collapse must close the card");
+  if (!c._helperOn()) throw new Error("helper must stay on");
 
-  // Helper on + a switch on: the helper must not force it open.
-  c.hass.states["input_boolean.show_x"].state = "on";
+  // Helper on + switch on: the card still opens with everything.
   c.hass.states["switch.x"].state = "on";
   c._open = false;
+  c._override = false;
   c._sig = "";
   c.hass = hass;
   if (!c.shadowRoot.innerHTML.includes('class="body"')) throw new Error("body missing");
-
-  // Collapsing while active still releases the helper.
-  calls.length = 0;
-  c._click({ target: { closest: (s) => (s === "[data-open]" ? {} : null) } });
-  if (!calls.some((x) => x.s === "turn_off" && x.id === "input_boolean.show_x")) {
-    throw new Error("collapse while active must release the helper");
-  }
+  if (!c._isOpen()) throw new Error("helper must open active cards too");
   console.log("ok: show_helper summon/collapse");
 }
 
@@ -434,4 +422,33 @@ console.log("ok: hierarchy-area self-check passed");
   c.hass = hass;
   if (!c._active()) throw new Error("holding switch on must activate the card");
   console.log("ok: hold flag");
+}
+
+// Off targets only controls with hold ticked, and never downstreams.
+{
+  const c = new ctx.HierarchyAreaCard();
+  c.setConfig({
+    name: "Off",
+    controls: [
+      { entity: "switch.a" },
+      { entity: "light.held", hold: true },
+      { entity: "light.free", hold: false },
+      { entity: "switch.b", downstream: [{ entity: "light.kid" }] },
+    ],
+  });
+  const calls = [];
+  c.hass = {
+    states: Object.fromEntries(
+      ["switch.a", "light.held", "light.free", "switch.b", "light.kid"].map((e) => [e, { state: "on", attributes: {} }])
+    ),
+    callService: (d, s, data) => calls.push({ d, s, ids: data.entity_id }),
+  };
+  c._master();
+  const ids = calls[0].ids;
+  if (!ids.includes("switch.a") || !ids.includes("light.held") || !ids.includes("switch.b")) {
+    throw new Error("Off must include every holding control: " + JSON.stringify(ids));
+  }
+  if (ids.includes("light.free")) throw new Error("Off must skip hold: false");
+  if (ids.includes("light.kid")) throw new Error("Off must never touch downstreams");
+  console.log("ok: Off scope");
 }

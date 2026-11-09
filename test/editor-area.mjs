@@ -273,3 +273,45 @@ console.log("ok: reorder survives rebuilds");
   if (order() !== "switch.c,switch.a") throw new Error("freeze: delete failed " + order());
   console.log("ok: survives HA deep-freeze");
 }
+
+// Opening the editor materialises hold and regenerates state-only visibility.
+{
+  const el3 = document.createElement("hierarchy-area-editor");
+  document.body.append(el3);
+  let opened = null;
+  el3.addEventListener("config-changed", (e) => { opened = e.detail.config; });
+  el3.setConfig({
+    type: "custom:hierarchy-area",
+    name: "Open",
+    show_helper: "input_boolean.floor",
+    controls: [{ entity: "switch.a" }, { entity: "light.b" }],
+    visibility: [{ condition: "or", conditions: [{ condition: "state", entity: "switch.a", state: "on" }] }],
+  });
+  if (!opened) throw new Error("editor open must emit the normalised config");
+  const holds = opened.controls.map((c) => c.hold);
+  if (holds[0] !== true || holds[1] !== false) throw new Error("hold defaults not materialised: " + JSON.stringify(holds));
+  const vis = (opened.visibility || []).flatMap((x) => x.conditions || []).map((x) => x.entity);
+  if (!vis.includes("input_boolean.floor") || !vis.includes("switch.a") || vis.includes("light.b")) {
+    throw new Error("open must regenerate visibility: " + JSON.stringify(opened.visibility));
+  }
+  console.log("ok: editor open sync");
+}
+
+// Hand-authored visibility is preserved.
+{
+  const el4 = document.createElement("hierarchy-area-editor");
+  document.body.append(el4);
+  let last4 = null;
+  el4.addEventListener("config-changed", (e) => { last4 = e.detail.config; });
+  el4.setConfig({
+    type: "custom:hierarchy-area",
+    name: "Manual",
+    controls: [{ entity: "switch.a" }],
+    visibility: [{ condition: "screen", media_query: "(min-width: 800px)" }],
+  });
+  if (!last4) throw new Error("no emit for manual visibility config");
+  if (!(last4.visibility || []).some((x) => x.condition === "screen")) {
+    throw new Error("manual visibility must survive: " + JSON.stringify(last4.visibility));
+  }
+  console.log("ok: manual visibility preserved");
+}

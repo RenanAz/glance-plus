@@ -18,7 +18,7 @@
 const HA_ON_COLOR = {
   light: "#fbbf24",
   switch: "#60a5fa",
-  fan: "#38bdf8",
+  fan: "#22d3ee",
   input_boolean: "#a78bfa",
   media_player: "#f472b6",
   cover: "#2dd4bf",
@@ -33,19 +33,60 @@ const HA_ICON = {
   cover: "mdi:window-shutter",
 };
 
+const VERSION = "1.16.0";
+
+// One rule for "does this control hold the area open?".
+// Explicit hold wins; switches hold by default; lamps only in a switch-less area.
+const HA_HOLD = (c, all) => {
+  if (!c || !c.entity) return false;
+  if (c.hold !== undefined) return c.hold !== false;
+  const hasSwitch = (all || []).some((x) => x && String(x.entity || "").startsWith("switch."));
+  return c.entity.startsWith("switch.") || !hasSwitch;
+};
+
 // Native card visibility, derived from the controls that exist right now.
-// A switch holds by default; a control can opt out with hold: false.
 const HA_VIS = (cfg) => {
   if (!cfg) return undefined;
   const list = HA_NORM(cfg.controls);
-  const hasSwitch = list.some((c) => c.entity.startsWith("switch."));
   const conds = [];
   if (cfg.show_helper) conds.push({ condition: "state", entity: cfg.show_helper, state: "on" });
   for (const c of list) {
-    const hold = c.hold !== undefined ? c.hold !== false : c.entity.startsWith("switch.") || !hasSwitch;
-    if (hold) conds.push({ condition: "state", entity: c.entity, state: "on" });
+    if (HA_HOLD(c, list)) conds.push({ condition: "state", entity: c.entity, state: "on" });
   }
   return conds.length ? [{ condition: "or", conditions: conds }] : undefined;
+};
+
+// The generated shape is safe to replace; anything else was hand-authored.
+const HA_VIS_MANUAL = (vis) => {
+  const ok = (c) =>
+    c && c.condition === "state" && !!c.entity && c.state !== undefined &&
+    c.state_not === undefined && c.for === undefined;
+  if (!Array.isArray(vis) || !vis.length) return false;
+  return !vis.every(
+    (c) => ok(c) || (c.condition === "or" && Array.isArray(c.conditions) && c.conditions.every(ok))
+  );
+};
+
+// One 60 s clock for every card on the page, not one per card.
+const HA_TICKERS = new Set();
+let HA_TICK_TIMER = null;
+const HA_TICK_START = () => {
+  if (HA_TICK_TIMER) return;
+  HA_TICK_TIMER = setInterval(() => {
+    for (const el of HA_TICKERS) {
+      try {
+        el._tickRender();
+      } catch (e) {
+        /* one bad card must not stop the clock */
+      }
+    }
+  }, 60000);
+};
+const HA_TICK_STOP = () => {
+  if (!HA_TICKERS.size && HA_TICK_TIMER) {
+    clearInterval(HA_TICK_TIMER);
+    HA_TICK_TIMER = null;
+  }
 };
 
 const HA_NORM = (list) =>
@@ -83,8 +124,20 @@ class HierarchyAreaCard extends HTMLElement {
     this.shadowRoot.addEventListener("pointerdown", (ev) => this._down(ev));
     this.shadowRoot.addEventListener("pointermove", () => clearTimeout(this._holdT), true);
     for (const t of ["pointerup", "pointercancel", "pointerleave"]) {
-      this.shadowRoot.addEventListener(t, () => this._up());
+      this.shadowRoot.addEventListener(t, () => {
+        this._dragging = false;
+        this._up();
+      });
     }
+    // Keyboard path for more-info: Shift+Enter or the Context Menu key.
+    this.shadowRoot.addEventListener("keydown", (ev) => {
+      const more = (ev.key === "Enter" && ev.shiftKey) || ev.key === "ContextMenu";
+      if (!more) return;
+      const t = ev.target.closest("[data-e],[data-more]");
+      if (!t) return;
+      ev.preventDefault();
+      this._more(t.dataset.e || t.dataset.more);
+    });
   }
 
   static getConfigElement() {
@@ -114,12 +167,8 @@ class HierarchyAreaCard extends HTMLElement {
     this._secondaryInfo = ["none", "last-changed", "last-updated"].includes(config.secondary_info)
       ? config.secondary_info
       : "last-changed";
-    // A helper shared by many cards (e.g. one per floor) must not be turned
-    // off by tapping one card, and must not scroll every card into view.
-    this._releaseHelper = config.release_helper !== false;
     this._override = false;
     const list = HA_NORM(config.controls);
-    const hasSwitch = list.some((c) => c.entity.startsWith("switch."));
     this._controls = list.map((c) => ({
       entity: c.entity,
       name: c.name || null,
@@ -127,7 +176,7 @@ class HierarchyAreaCard extends HTMLElement {
       group: c.group || null,
       downstream: HA_NORM(c.downstream),
       follow: c.follow === true,
-      hold: c.hold !== undefined ? c.hold !== false : c.entity.startsWith("switch.") || !hasSwitch,
+      hold: HA_HOLD(c, list),
     }));
     this._open = prevOpen;
     this._sig = "";
@@ -141,28 +190,22 @@ class HierarchyAreaCard extends HTMLElement {
   }
 
   connectedCallback() {
-    // Relative last-changed labels ("1 min") need a re-render even when no
-    // state changes.
-    clearInterval(this._tick);
-    this._tick = setInterval(() => {
-      if (!this._config) return;
-      this._sig = "";
-      this._render();
-    }, 60000);
-    // Summoned from a chip: the element is re-created, bring it into view.
-    if (this._helperOn() && this._releaseHelper && !this._active()) {
-      setTimeout(() => {
-        try {
-          this.scrollIntoView({ behavior: "smooth", block: "center" });
-        } catch (e) {
-          /* older webview */
-        }
-      }, 80);
-    }
+    HA_TICKERS.add(this);
+    HA_TICK_START();
   }
 
   disconnectedCallback() {
-    clearInterval(this._tick);
+    HA_TICKERS.delete(this);
+    HA_TICK_STOP();
+  }
+
+  // Called by the shared clock. Skip when there is nothing relative to show or
+  // while a slider is under the finger.
+  _tickRender() {
+    if (!this.isConnected || !this._config) return;
+    if (this._secondaryInfo === "none" || this._dragging) return;
+    this._sig = "";
+    this._render();
   }
   get hass() {
     return this._hass;
@@ -283,8 +326,8 @@ class HierarchyAreaCard extends HTMLElement {
           '<ha-icon class="chev" icon="' + (open ? "mdi:chevron-up" : "mdi:chevron-down") + '"></ha-icon>' +
         "</button>" +
         (active
-          ? '<button class="master on" data-master aria-label="All off for ' + this._esc(name) + '">' +
-            '<ha-icon icon="mdi:power"></ha-icon></button>'
+          ? '<button class="off" data-master aria-label="Off for ' + this._esc(name) +
+            '" title="Turn off holding controls"><ha-icon icon="mdi:power"></ha-icon><span>Off</span></button>'
           : "") +
       "</div>";
 
@@ -451,6 +494,7 @@ class HierarchyAreaCard extends HTMLElement {
   // ---- interaction --------------------------------------------------------
 
   _down(ev) {
+    if (ev.target.closest(".slide")) this._dragging = true;
     const t = ev.target.closest("[data-e],[data-more]");
     if (!t) return;
     clearTimeout(this._holdT);
@@ -476,11 +520,7 @@ class HierarchyAreaCard extends HTMLElement {
     if (ent) return this._toggle(ent.dataset.e);
     if (ev.target.closest("[data-open]")) {
       const open = this._isOpen();
-      // A per-card helper is released on tap (chip row flow). A shared floor
-      // helper stays on; the tap only collapses/expands this card.
-      if (this._helperOn() && this._releaseHelper) {
-        this._hass.callService("input_boolean", "turn_off", { entity_id: this._showHelper });
-      }
+      // A shared helper is never released; the tap only collapses this card.
       this._open = !open;
       this._override = open && this._helperOn();
       this._sig = "";
@@ -500,10 +540,8 @@ class HierarchyAreaCard extends HTMLElement {
   }
 
   _master() {
-    // Only wall switches (or the plain controls when the area has none).
-    // Downstream devices are never touched by the master.
-    const sw = this._controls.filter((c) => c.entity.startsWith("switch."));
-    const pool = sw.length ? sw : this._controls;
+    // Only controls that can hold the area. Downstreams are never touched.
+    const pool = this._controls.filter((c) => c.hold);
     this._set([...new Set(pool.map((c) => c.entity))], !pool.some((c) => this._isOn(c.entity)));
     this._open = true;
     this._override = false;
@@ -546,14 +584,14 @@ class HierarchyAreaCard extends HTMLElement {
         background: linear-gradient(180deg, var(--ac), color-mix(in srgb, var(--ac) 15%, transparent));
         opacity: calc(.3 + var(--glow) * .7);
       }
-      .head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+      .head { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 26px; }
       .head.in { padding: calc(1px * var(--k, 1)) calc(2px * var(--k, 1)) calc(5px * var(--k, 1)); }
       .head:not(.in) {
         padding: 0 calc(2px * var(--k, 1)) calc(1px * var(--k, 1)) calc(5px * var(--k, 1));
       }
       .aopen {
         display: flex; align-items: center; gap: calc(6px * var(--k, 1)); flex: 1;
-        min-width: 0; padding: 0;
+        min-width: 0; min-height: 26px; padding: 0;
         font: inherit; color: inherit; text-align: left;
         background: none; border: 0; cursor: pointer;
       }
@@ -594,7 +632,7 @@ class HierarchyAreaCard extends HTMLElement {
       .tile .tname { flex: 1; min-width: 0; text-align: center; }
       .tile .tsub {
         flex: none; margin-left: 2px;
-        font-size: calc(10px * var(--k, 1)); font-weight: 500;
+        font-size: calc(11px * var(--k, 1)); font-weight: 500;
         color: var(--secondary-text-color); opacity: .8;
       }
       .tile ha-icon { --mdc-icon-size: calc(14px * var(--k, 1)); color: var(--c); flex: none; }
@@ -635,10 +673,10 @@ class HierarchyAreaCard extends HTMLElement {
       .brail.dead { opacity: .45; }
       .brail:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; border-radius: 6px; }
       .bname {
-        font-size: calc(10px * var(--k, 1)); font-weight: 600; line-height: 1.05; text-align: center;
+        font-size: calc(11px * var(--k, 1)); font-weight: 600; line-height: 1.05; text-align: center;
         overflow: hidden; overflow-wrap: anywhere;
       }
-      .btime { font-size: calc(10px * var(--k, 1)); line-height: 1.1; opacity: .8; white-space: nowrap; text-align: center; }
+      .btime { font-size: calc(11px * var(--k, 1)); line-height: 1.1; opacity: .8; white-space: nowrap; text-align: center; }
       .kids {
         display: grid; grid-template-columns: repeat(var(--kw, 1), minmax(0, 1fr));
         gap: calc(4px * var(--k, 1));
@@ -656,7 +694,7 @@ class HierarchyAreaCard extends HTMLElement {
           color-mix(in srgb, var(--c) 15%, transparent) var(--pct, 0%),
           color-mix(in srgb, var(--primary-text-color) 4%, transparent) 0);
       }
-      .ktime { font-size: calc(10px * var(--k, 1)); color: var(--secondary-text-color); white-space: nowrap; z-index: 2; pointer-events: none; }
+      .ktime { font-size: calc(11px * var(--k, 1)); color: var(--secondary-text-color); white-space: nowrap; z-index: 2; pointer-events: none; }
       .kname {
         flex: 1; min-width: 0;
         font-size: calc(11.5px * var(--k, 1)); font-weight: 600; color: var(--primary-text-color);
@@ -665,7 +703,7 @@ class HierarchyAreaCard extends HTMLElement {
         z-index: 2; pointer-events: none;
       }
       .kpct {
-        flex: none; font-size: calc(10px * var(--k, 1));
+        flex: none; font-size: calc(11px * var(--k, 1));
         color: var(--secondary-text-color); z-index: 2; pointer-events: none;
       }
       .kidbox.emb.has-time .kpct { display: none; }
@@ -677,6 +715,8 @@ class HierarchyAreaCard extends HTMLElement {
         padding: 0; border: 0; background: none; cursor: pointer;
         color: var(--c); pointer-events: auto;
       }
+      /* invisible 24 px hit area around the 14 px toggle icon */
+      .kicon::after { content: ""; position: absolute; inset: -6px; }
       .kicon ha-icon { --mdc-icon-size: calc(14px * var(--k, 1)); }
       .kicon:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; border-radius: 4px; }
       .slide.cover {
@@ -692,20 +732,19 @@ class HierarchyAreaCard extends HTMLElement {
       }
       .kid ha-icon { --mdc-icon-size: calc(13px * var(--k, 1)); }
 
-      .master {
-        width: calc(20px * var(--k, 1)); height: calc(20px * var(--k, 1)); flex: none;
-        margin-top: 1px; padding: 0;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 50%; cursor: pointer;
-        color: #93c5fd; opacity: .85;
-        background: transparent;
-        border: 1px solid color-mix(in srgb, #60a5fa 55%, transparent);
-        box-shadow: 0 0 10px rgba(59, 130, 246, .28);
-        transition: opacity .12s ease, box-shadow .12s ease;
+      .off {
+        flex: none; margin-left: auto;
+        display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        height: 24px; padding: 0 8px; box-sizing: border-box;
+        font: inherit; font-size: calc(10.5px * var(--k, 1)); font-weight: 600; line-height: 1;
+        color: #f87171; background: color-mix(in srgb, #b91c1c 18%, transparent);
+        border: 1px solid color-mix(in srgb, #b91c1c 55%, transparent);
+        border-radius: 999px; cursor: pointer;
       }
-      .master ha-icon { --mdc-icon-size: calc(11px * var(--k, 1)); display: block; }
-      .master:hover { opacity: 1; box-shadow: 0 0 14px rgba(59, 130, 246, .45); }
-      .master:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      .off ha-icon { --mdc-icon-size: calc(12px * var(--k, 1)); display: flex; align-items: center; justify-content: center; }
+      .off span { line-height: 1; }
+      .off:hover { background: color-mix(in srgb, #b91c1c 28%, transparent); }
+      .off:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
 
       @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
       @media (max-width: 420px) {
@@ -747,7 +786,7 @@ window.customCards.push({
   documentationURL: "https://github.com/RenanzAz/glance-plus",
 });
 
-console.info("%c HIERARCHY-AREA %c 1.15.0 ", "background:#0f766e;color:#fff", "");
+console.info("%c HIERARCHY-AREA %c " + VERSION + " ", "background:#0f766e;color:#fff", "");
 
 /* ------------------------------------------------------------------ *
  * Editor: area fields + a flat control list (entity, name, group,
@@ -846,7 +885,44 @@ class HierarchyAreaEditor extends HTMLElement {
     this._config = JSON.parse(JSON.stringify(config || {}));
     const list = Array.isArray(this._config.controls) ? this._config.controls : [];
     this._config.controls = list.map((x) => (typeof x === "string" ? { entity: x } : Object.assign({}, x)));
+    this._manualVis = HA_VIS_MANUAL(this._config.visibility);
+    const before = JSON.stringify(this._config);
+    this._materializeHold();
+    if (!this._manualVis) {
+      const vis = HA_VIS(this._config);
+      if (vis) this._config.visibility = vis;
+      else delete this._config.visibility;
+    }
     this._build();
+    // Opening the editor repairs drift, but HA only persists on Save.
+    if (JSON.stringify(this._config) !== before) this._emit();
+  }
+
+  _updateWarn() {
+    if (!this._warnEl) return;
+    const holders = (this._config.controls || []).filter((c) => HA_HOLD(c, this._config.controls));
+    const msgs = [];
+    if (this._manualVis) msgs.push("Manual visibility detected — auto-sync is off.");
+    if (!holders.length && !this._config.show_helper) {
+      msgs.push("No control holds this card and no show helper is set — it will always be visible.");
+    }
+    this._warnEl.textContent = msgs.join(" ");
+    this._warnEl.style.display = msgs.length ? "" : "none";
+  }
+
+  _materializeHold() {
+    for (const c of this._config.controls || []) {
+      if (!c || !c.entity) continue;
+      if (c.hold === undefined) c.hold = HA_HOLD(c, this._config.controls);
+    }
+  }
+
+  _emit() {
+    this._lastEmit = JSON.stringify(this._config);
+    const config = JSON.parse(JSON.stringify(this._config));
+    this.dispatchEvent(
+      new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true })
+    );
   }
 
   // ---- config plumbing ----------------------------------------------------
@@ -858,18 +934,16 @@ class HierarchyAreaEditor extends HTMLElement {
   }
 
   _changed() {
-    // Native visibility only exists in the dashboard config; regenerate it
-    // from the current controls so removing an entity cannot leave it stale.
-    const vis = HA_VIS(this._config);
-    if (vis) this._config.visibility = vis;
-    else delete this._config.visibility;
-    this._lastEmit = JSON.stringify(this._config);
-    // HA deep-freezes the object carried by config-changed, so hand it a copy:
-    // this._config must stay mutable for the next edit.
-    const config = JSON.parse(JSON.stringify(this._config));
-    this.dispatchEvent(
-      new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true })
-    );
+    this._materializeHold();
+    // Native visibility lives in the dashboard config; regenerate it from the
+    // current controls unless the user hand-authored something we must keep.
+    if (!this._manualVis) {
+      const vis = HA_VIS(this._config);
+      if (vis) this._config.visibility = vis;
+      else delete this._config.visibility;
+    }
+    this._updateWarn();
+    this._emit();
   }
 
   // ---- delegated actions --------------------------------------------------
@@ -1150,6 +1224,10 @@ class HierarchyAreaEditor extends HTMLElement {
     hint.textContent =
       "Columns = tiles per row (default 4). Secondary info = the timestamp shown with names.";
     card.append(hint);
+    this._warnEl = document.createElement("div");
+    this._warnEl.className = "hint";
+    card.append(this._warnEl);
+    this._updateWarn();
 
     const add = document.createElement("button");
     add.type = "button";
@@ -1163,7 +1241,7 @@ class HierarchyAreaEditor extends HTMLElement {
 
     const ver = document.createElement("div");
     ver.className = "hint";
-    ver.textContent = "hierarchy-area 1.12.0";
+    ver.textContent = "hierarchy-area " + VERSION;
 
     ed.append(card, this._sec, ver);
     root.append(style, ed);
@@ -1242,9 +1320,7 @@ class HierarchyAreaEditor extends HTMLElement {
 
     body.append(this._row("Downstream", this._downstreamBlock(c, i)));
 
-    const hasSwitch = this._config.controls.some((x) => String(x.entity || "").startsWith("switch."));
-    const holdDefault = String(c.entity || "").startsWith("switch.") || !hasSwitch;
-    const holdValue = c.hold !== undefined ? c.hold !== false : holdDefault;
+    const holdValue = HA_HOLD(c, this._config.controls);
     body.append(
       this._row("Holds card", this._bool(holdValue, (v) => {
         const cur = at();

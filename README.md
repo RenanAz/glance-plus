@@ -148,24 +148,24 @@ One area per card, stacked like cards. Replaces the multi-area card below in
   padding, fonts, icons, rail and gaps together, so the proportions never
   change. Small = the 1.8.1 thin build (24 px light tile), medium = 28 px,
   large = 32 px.
-- **Master power** is the round button at the right end of the header.
-  Transparent with a blue outline + glow (no fill). It only exists while a wall
-  switch in the area is on, and it only targets `switch.*` controls (or the
-  plain controls when the area has none) — downstream devices are never touched.
+- **Off** is a slim dark-red pill at the right end of the header, shown only
+  while the card is active. It turns off every control with `hold` ticked and
+  nothing else — downstream devices and unticked controls keep their power.
 - **Area state = holding controls.** A card is "active" while a control marked
   `hold` is on. Switches hold by default; lamps/LEDs do not (unless the area
   has no switch at all). Untick "Holds card" in the editor to stop a control
-  from keeping the card visible.
-- **Visibility is generated.** HA's native card `visibility` is rebuilt by the
-  visual editor on every change from the controls marked `hold` plus
-  `show_helper`. Removing or renaming an entity drops it from visibility, so it
-  can no longer keep a card on screen. Native visibility also removes the grid
-  row completely (no blank space). Editing the raw YAML bypasses this; open and
-  touch the card in the editor once after such an edit.
+  from keeping the card visible. Defaults are frozen into config on the first
+  editor save, so adding a switch later cannot flip existing lights.
+- **Visibility is generated.** HA's native card `visibility` is rebuilt from
+  the controls marked `hold` plus `show_helper` — on every editor change and
+  when the editor opens (HA persists on Save). Removing or renaming an entity
+  drops it, so it cannot keep a card on screen; native visibility also removes
+  the grid row completely (no blank space). Hand-authored (screen/user/etc.)
+  visibility is detected and left alone. For raw-YAML or bulk changes run
+  `scripts/sync-visibility.mjs` (see below).
 - **Shared floor helper.** A `show_helper` can be shared by many cards (one
   per floor, driven by the floor heading): every card opens with all controls,
-  and a tap collapses only that card. Set `release_helper: false` on those
-  cards so the shared helper is never turned off.
+  and a tap collapses only that card. The helper is never turned off by a tap.
 - **Bundles.** A switch with `downstream` encapsulates its devices in one
   blue box: the switch's icon, name and relative last change (min / h / d) sit
   on the left rail, the device sliders nest to the right. One downstream =
@@ -185,9 +185,10 @@ One area per card, stacked like cards. Replaces the multi-area card below in
   timestamp shown next to solo switch names and on switch rails.
 - **Plate grouping:** consecutive controls with the same `group` render under
   that plate label when expanded. Collapsed mode drops labels.
-- Hold any tile for more-info. Colours: on = amber (light), blue (switch),
-  sky (fan), violet (boolean); each area has its own accent for the left trace
-  and icon.
+- Hold any tile for more-info; with a keyboard use Shift+Enter or the Context
+  Menu key. Colours: on = amber (light), blue (switch), cyan (fan), violet
+  (boolean); each area has its own accent for the left trace and icon. All
+  names are centred. Secondary text is 11 px at Medium.
 
 Live inline resource: `57aef9a9bb594ebeaa09bee679a90244` (`module`).
 
@@ -207,6 +208,7 @@ controls:
   - entity: switch.switch_cozinha_principal_left
     name: Luz teto
     group: Cozinha principal
+    hold: true             # on = keeps the card visible
     downstream:
       - entity: light.switch_cozinha_principal_left
         name: Teto
@@ -237,6 +239,16 @@ and remove), not free text.
 
 Checks: `npm test` runs `test/hierarchy-area.mjs` (model/interaction, brightness)
 and `test/editor-area.mjs` (jsdom editor).
+
+Bulk visibility/hold sync (after raw-YAML edits or a control change outside the
+editor):
+
+```bash
+HA_MCP_URL="http://host:port/private_token" node scripts/sync-visibility.mjs home-test
+```
+
+It loads `src/hierarchy-area.js` headlessly and applies the same rules; cards
+with hand-authored visibility are skipped. Add `--dry` to preview.
 
 ---
 

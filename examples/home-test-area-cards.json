@@ -22,21 +22,23 @@
    {
     "entity": "switch.hall_left",
     "name": "Esq",
-    "group": "Hall"
+    "group": "Hall",
+    "hold": true
    },
    {
     "entity": "switch.hall_right",
     "name": "Externa",
-    "group": "Hall"
+    "group": "Hall",
+    "hold": true
    },
    {
     "entity": "light.plug_hall",
-    "name": "Plug hall"
+    "name": "Plug hall",
+    "hold": false
    }
   ],
   "show_helper": "input_boolean.show_lights_r_c",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -76,7 +78,8 @@
       "entity": "light.garage_left",
       "name": "Luz esq"
      }
-    ]
+    ],
+    "hold": true
    },
    {
     "entity": "switch.garage_right",
@@ -87,12 +90,12 @@
       "entity": "light.garage_right",
       "name": "Luz dir"
      }
-    ]
+    ],
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_r_c",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -125,12 +128,12 @@
   "controls": [
    {
     "entity": "switch.banheiro_terreo",
-    "name": "Luz banheiro"
+    "name": "Luz banheiro",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_r_c",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -165,7 +168,8 @@
       "entity": "light.sala_terreo_porta_left",
       "name": "Luz esq"
      }
-    ]
+    ],
+    "hold": true
    },
    {
     "entity": "switch.sala_terreo_porta_right",
@@ -176,12 +180,14 @@
       "entity": "light.sala_terreo_porta_right",
       "name": "Luz dir"
      }
-    ]
+    ],
+    "hold": true
    },
    {
     "entity": "switch.sala_terreo_sanca_left",
     "name": "Esq",
-    "group": "Sala RC · Sanca"
+    "group": "Sala RC · Sanca",
+    "hold": true
    },
    {
     "entity": "switch.sala_terreo_sanca_right",
@@ -191,12 +197,12 @@
      {
       "entity": "light.ikea_white"
      }
-    ]
+    ],
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_r_c",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -239,16 +245,17 @@
   "controls": [
    {
     "entity": "light.lora_portao",
-    "name": "Luzes portão"
+    "name": "Luzes portão",
+    "hold": true
    },
    {
     "entity": "light.reolink_portao_floodlight",
-    "name": "Floodlight"
+    "name": "Floodlight",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_r_c",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -296,19 +303,22 @@
     "entity": "switch.aqara_triplo_0_left",
     "name": "TV / Lareira",
     "group": "Spots",
-    "icon": "mdi:lightbulb-spot"
+    "icon": "mdi:lightbulb-spot",
+    "hold": true
    },
    {
     "entity": "switch.aqara_triplo_1_left",
     "name": "Triplos",
     "group": "Spots",
-    "icon": "mdi:lightbulb-spot"
+    "icon": "mdi:lightbulb-spot",
+    "hold": true
    },
    {
     "entity": "switch.aqara_duplo_sala_1_left",
     "name": "Porta Coz.",
     "icon": "mdi:lightbulb-spot",
-    "group": "Spots"
+    "group": "Spots",
+    "hold": true
    },
    {
     "entity": "switch.aqara_triplo_0_center",
@@ -324,7 +334,8 @@
       "name": "Sanca"
      }
     ],
-    "icon": "mdi:led-strip"
+    "icon": "mdi:led-strip",
+    "hold": true
    },
    {
     "entity": "switch.aqara_triplo_1_center",
@@ -340,7 +351,8 @@
       "entity": "light.led_strip_rgbw_1",
       "name": "Cor"
      }
-    ]
+    ],
+    "hold": true
    }
   ],
   "grid_options": {
@@ -350,7 +362,6 @@
   "show_helper": "input_boolean.show_lights_1st_floor",
   "hide_name_on": true,
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -404,7 +415,8 @@
       "entity": "light.kitchen_gunnarp",
       "name": "Teto"
      }
-    ]
+    ],
+    "hold": true
    },
    {
     "entity": "switch.switch_cozinha_principal_right",
@@ -413,12 +425,12 @@
      {
       "entity": "switch.leds_cozinha_lora1"
      }
-    ]
+    ],
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_1st_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -458,7 +470,8 @@
       "entity": "light.bulb_03",
       "name": "Forte"
      }
-    ]
+    ],
+    "hold": true
    },
    {
     "entity": "switch.lidl_3_l3",
@@ -469,7 +482,8 @@
       "entity": "light.lampada_cabeceira",
       "name": "Cabeceira"
      }
-    ]
+    ],
+    "hold": true
    },
    {
     "entity": "switch.lidl_3_l1",
@@ -486,7 +500,6 @@
   ],
   "show_helper": "input_boolean.show_lights_1st_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -526,7 +539,8 @@
       "name": "Lâmpada"
      }
     ],
-    "group": "Interruptor"
+    "group": "Interruptor",
+    "hold": true
    },
    {
     "entity": "switch.lidl_switch_01",
@@ -537,7 +551,6 @@
   ],
   "show_helper": "input_boolean.show_lights_1st_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -565,12 +578,12 @@
   "controls": [
    {
     "entity": "light.bulb_04",
-    "name": "Luz do Corredor"
+    "name": "Luz do Corredor",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_1st_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -598,12 +611,12 @@
   "controls": [
    {
     "entity": "switch.banheiro_casal",
-    "name": "Luz banheiro"
+    "name": "Luz banheiro",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_1st_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -631,12 +644,12 @@
   "controls": [
    {
     "entity": "switch.banheiro_quarto2",
-    "name": "Luz banheiro"
+    "name": "Luz banheiro",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_1st_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -677,16 +690,17 @@
   "controls": [
    {
     "entity": "light.bulb01",
-    "name": "Lampada Office"
+    "name": "Lampada Office",
+    "hold": true
    },
    {
     "entity": "light.snapmaker_u1_led_cavity_led",
-    "name": "Snapmaker LED"
+    "name": "Snapmaker LED",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_2nd_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
@@ -719,12 +733,12 @@
   "controls": [
    {
     "entity": "switch.sotao_sotao_light",
-    "name": "Luz AC"
+    "name": "Luz AC",
+    "hold": true
    }
   ],
   "show_helper": "input_boolean.show_lights_2nd_floor",
   "header_style": "title",
-  "release_helper": false,
   "visibility": [
    {
     "condition": "or",
