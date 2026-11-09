@@ -108,22 +108,6 @@ Not yet: drag-and-drop reordering of cells, live preview of Jinja while typing.
 
 - Native `show_if` condition objects — Jinja only.
 
-## Idle chip row
-
-```yaml
-type: custom:hierarchy-area-chips
-items:
-  - name: Sala
-    icon: mdi:sofa-outline
-    accent: "#fb7185"
-    helper: input_boolean.show_sala
-    switches: [switch.aqara_triplo_0_left, switch.aqara_triplo_0_center]
-```
-
-A chip is shown when its helper is off **and** every entity in `switches` is off.
-The row hides itself when no chip is left. Generated on `/home-test` for all 14
-areas, with the matching `show_helper` on each area card.
-
 ## Checks (no browser needed)
 
 Run from the repo root:
@@ -142,7 +126,7 @@ node test/fetch-subscription.mjs  # render_template subscription path against th
 
 # Hierarchy Area (`custom:hierarchy-area`) — current
 
-One area per card, stacked like chips. Replaces the multi-area card below in
+One area per card, stacked like cards. Replaces the multi-area card below in
 `/home-test`; the older `hierarchy-areas` resource is kept but unused.
 
 - **Compact until needed.** Collapsed shows the header and only entities
@@ -159,13 +143,11 @@ One area per card, stacked like chips. Replaces the multi-area card below in
   clamped to 1..100 and use a trailing throttled send, so the released value
   always lands.
 - **Size is dashboard-owned.** Cards render full width and follow `grid_options`.
-  The `auto_size` experiment was reverted and ships disabled.
 - **Grid and size.** `columns: 4` (changeable). `size: small | medium | large`
   (default **medium**) scales the area header font/icon plus tile height,
   padding, fonts, icons, rail and gaps together, so the proportions never
   change. Small = the 1.8.1 thin build (24 px light tile), medium = 28 px,
-  large = 32 px. Compact chips use at most 2 tile columns so the tiles stay
-  readable.
+  large = 32 px.
 - **Master power** is the round button at the right end of the header.
   Transparent with a blue outline + glow (no fill). It only exists while a wall
   switch in the area is on, and it only targets `switch.*` controls (or the
@@ -183,15 +165,9 @@ One area per card, stacked like chips. Replaces the multi-area card below in
 - **Shared floor helper.** A `show_helper` can be shared by many cards (one
   per floor, driven by the floor heading): every card opens with all controls,
   and a tap collapses only that card. Set `release_helper: false` on those
-  cards so the shared helper is never turned off. Do not combine a shared
-  helper with the chip row.
-- **Idle area chips (optional).** A `hierarchy-area-chips` card renders one
-  chip per idle area; tapping it toggles that area's own `show_helper`, which
-  creates the card expanded and scrolled into view. Give each card its own
-  helper (do not share it) and keep `release_helper` at its default so tapping
-  the header releases it. Not used on `/home-test` any more.
+  cards so the shared helper is never turned off.
 - **Bundles.** A switch with `downstream` encapsulates its devices in one
-  green box: the switch's icon, name and relative last change (min / h / d) sit
+  blue box: the switch's icon, name and relative last change (min / h / d) sit
   on the left rail, the device sliders nest to the right. One downstream =
   half width, so two one-device switches sit side by side; two or more = full
   width. A downstream tile shows its own icon, a bold name and brightness
@@ -259,8 +235,8 @@ from dragging. Arrow Up/Down on the focused handle does the same from the
 keyboard. Delete is the ✕ next to the row. Downstream devices are entity-picker rows (plus optional name
 and remove), not free text.
 
-Checks: `node test/hierarchy-area.mjs` (model/interaction, brightness) and
-`node test/editor-area.mjs` (jsdom editor).
+Checks: `npm test` runs `test/hierarchy-area.mjs` (model/interaction, brightness)
+and `test/editor-area.mjs` (jsdom editor).
 
 ---
 

@@ -1,0 +1,11 @@
+{
+  "name": "glance-plus",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/hierarchy-area.mjs && node test/editor-area.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}

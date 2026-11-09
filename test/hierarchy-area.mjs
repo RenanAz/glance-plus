@@ -168,48 +168,6 @@ if (calls[0].service !== "turn_off") throw new Error("master on -> turn_off");
 
 console.log("ok: hierarchy-area self-check passed");
 
-// Auto-size: compact span unless open or a wall switch (not a light) is on.
-{
-  const c2 = new ctx.HierarchyAreaCard();
-  c2.setConfig({
-    name: "Sala",
-    auto_size: true,
-    compact_columns: 3,
-    full_columns: 12,
-    controls: [{ entity: "switch.a" }, { entity: "light.d1" }],
-  });
-  const host = { tagName: "HUI-CARD", style: {} };
-  c2.parentElement = host;
-  const allOff = {
-    states: {
-      "switch.a": { state: "off", attributes: {} },
-      "light.d1": { state: "off", attributes: {} },
-    },
-    callService() {},
-  };
-  c2.hass = allOff;
-  if (!c2._mini()) throw new Error("all off should be mini");
-  if (host.style.gridColumn !== "span 3") throw new Error("mini span wrong: " + host.style.gridColumn);
-
-  allOff.states["light.d1"].state = "on";
-  c2._sig = "";
-  c2.hass = allOff;
-  if (!c2._mini()) throw new Error("a light alone must keep the card compact");
-  if (host.style.gridColumn !== "span 3") throw new Error("light-only span wrong");
-
-  allOff.states["switch.a"].state = "on";
-  c2._sig = "";
-  c2.hass = allOff;
-  if (c2._mini()) throw new Error("a switch on must take the full width");
-  if (host.style.gridColumn !== "span 12") throw new Error("full span wrong: " + host.style.gridColumn);
-
-  c2._open = true;
-  allOff.states["switch.a"].state = "off";
-  c2._sig = "";
-  c2.hass = allOff;
-  if (c2._mini()) throw new Error("expanded must take the full width");
-  console.log("ok: auto-size modes");
-}
 
 // show_helper: forced open only while idle; collapsing always releases it.
 {

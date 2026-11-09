@@ -1,5 +1,5 @@
 /*
- * Hierarchy Area — one area per card, stacked like chips.
+ * Hierarchy Area — one area per card, stacked like cards.
  *
  * Compact by default: the card is a single header row until something is on.
  * Only entities that are ON are listed; tapping the area block (left) or the
@@ -137,12 +137,10 @@ class HierarchyAreaCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._helperOn()) this._override = false;
-    if (this._config) this._applySize(this._mini());
     this._render();
   }
 
   connectedCallback() {
-    if (this._config) this._applySize(this._mini());
     // Relative last-changed labels ("1 min") need a re-render even when no
     // state changes.
     clearInterval(this._tick);
@@ -220,33 +218,6 @@ class HierarchyAreaCard extends HTMLElement {
     return !!this._showHelper && this._isOn(this._showHelper);
   }
 
-  // Idle + a show helper that is off -> the card belongs to the chip row.
-  // Compact chip unless the card is open or a wall switch (not a light) is on.
-  _mini() {
-    if (!this._config.auto_size) return false;
-    if (this._open) return false;
-    return !this._controls.some((c) => this._isOn(c.entity) && c.entity.split(".")[0] !== "light");
-  }
-
-  // Never hide a container: only <hui-card> (the grid item) or this card.
-  _gridItem() {
-    const p = this.parentElement;
-    return p && p.tagName === "HUI-CARD" ? p : this;
-  }
-
-  // Sections view: the grid item is the host (hui-card). grid_options is
-  // dashboard geometry, so the span is applied to the host element directly.
-  _applySize(mini) {
-    if (!this._config.auto_size) return;
-    const host = this._gridItem();
-    if (!host || !host.style) return;
-    const span = mini
-      ? Number(this._config.compact_columns) || 3
-      : Number(this._config.full_columns) || 12;
-    const v = "span " + span;
-    if (host.style.gridColumn !== v) host.style.gridColumn = v;
-  }
-
   // Shared floor helper: every card opens. A tap collapses this card only.
   _isOpen() {
     return this._override ? this._open : this._open || this._helperOn();
@@ -282,13 +253,12 @@ class HierarchyAreaCard extends HTMLElement {
     this._sig = sig;
 
     const vis = this._visible();
-    const mini = this._mini();
     const open = this._isOpen();
     const active = this._active();
     const accent = this._accent(this._config.accent || "var(--accent-color, #818cf8)");
     const name = this._config.name || "Area";
     const icon = this._config.icon || "mdi:home-outline";
-    const cols = Math.max(1, Math.min(Number(this._config.columns) || 4, mini ? 2 : 99));
+    const cols = Math.max(1, Math.min(Number(this._config.columns) || 4, 99));
     const inside = this._headerStyle === "inside";
 
     let body = '<div class="body">';
@@ -312,7 +282,7 @@ class HierarchyAreaCard extends HTMLElement {
           '<span class="aname">' + this._esc(name) + "</span>" +
           '<ha-icon class="chev" icon="' + (open ? "mdi:chevron-up" : "mdi:chevron-down") + '"></ha-icon>' +
         "</button>" +
-        (active && !mini
+        (active
           ? '<button class="master on" data-master aria-label="All off for ' + this._esc(name) + '">' +
             '<ha-icon icon="mdi:power"></ha-icon></button>'
           : "") +
@@ -320,14 +290,12 @@ class HierarchyAreaCard extends HTMLElement {
 
     this.shadowRoot.innerHTML =
       "<style>" + this._css() + "</style>" +
-      '<div class="area ' + this._size + (inside ? " inside" : " title") + (mini ? " mini" : "") +
+      '<div class="area ' + this._size + (inside ? " inside" : " title") +
         '" style="--ac:' + this._esc(accent) + ";--glow:" + (active ? "1" : "0") + ";--k:" +
         ({ small: 0.86, medium: 1, large: 1.16 })[this._size] + '">' +
       (inside ? "<ha-card>" + head + body + "</ha-card>"
         : head + (vis.length ? "<ha-card>" + body + "</ha-card>" : "")) +
       "</div>";
-
-    this._applySize(mini);
   }
 
   _signature() {
@@ -601,10 +569,6 @@ class HierarchyAreaCard extends HTMLElement {
       }
       .head.in .aname { font-size: calc(11.5px * var(--k, 1)); }
       .chev { --mdc-icon-size: calc(13px * var(--k, 1)); opacity: .55; flex: none; }
-      .area.mini .head { min-height: 30px; }
-      .area.mini .aname { font-size: 11.5px; }
-      .area.mini .aicon { --mdc-icon-size: 19px; }
-      .area.mini .body { gap: 3px; }
 
       .body { display: flex; flex-direction: column; gap: calc(4px * var(--k, 1)); min-width: 0; }
       .glabel {
@@ -1411,158 +1375,3 @@ class HierarchyAreaEditor extends HTMLElement {
 if (!customElements.get("hierarchy-area-editor")) {
   customElements.define("hierarchy-area-editor", HierarchyAreaEditor);
 }
-
-/* ------------------------------------------------------------------ *
- * Idle area chips — one chip per area with nothing on. The chip turns
- * its `show_*` helper on, which makes that area card appear; when the
- * area is active (or the helper is on) the chip is gone.
- * ------------------------------------------------------------------ */
-
-class HierarchyAreaChips extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-    this._hass = null;
-    this._config = null;
-    this._items = [];
-    this._sig = "";
-    this.shadowRoot.addEventListener("click", (ev) => this._click(ev));
-    this.shadowRoot.addEventListener("keydown", (ev) => {
-      if (ev.key !== "Enter" && ev.key !== " ") return;
-      const chip = ev.target.closest("[data-h]");
-      if (!chip) return;
-      ev.preventDefault();
-      chip.click();
-    });
-  }
-
-  static getStubConfig() {
-    return { items: [] };
-  }
-
-  setConfig(config) {
-    this._config = config || {};
-    this._items = (this._config.items || []).filter((i) => i && i.helper);
-    this._sig = "";
-    this._render();
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-    this._render();
-  }
-  get hass() {
-    return this._hass;
-  }
-
-  getCardSize() {
-    return 1;
-  }
-
-  _on(entity) {
-    const st = this._hass && this._hass.states[entity];
-    return !!st && st.state === "on";
-  }
-
-  _visible() {
-    return this._items.filter((it) => (it.switches || []).every((e) => !this._on(e)));
-  }
-
-  _hole(el, hide) {
-    const p = this.parentElement;
-    const target = p && p.tagName === "HUI-CARD" ? p : el;
-    if (!target || !target.style) return;
-    const v = hide ? "none" : "";
-    if (target.style.display !== v) target.style.display = v;
-  }
-
-  _render() {
-    if (!this._hass || !this._config) return;
-    const vis = this._visible();
-    this._hole(this, !vis.length);
-    const sig = vis.map((i) => i.helper + (this._on(i.helper) ? "+" : "-")).join("|");
-    if (sig === this._sig) return;
-    this._sig = sig;
-    this.shadowRoot.innerHTML = vis.length
-      ? "<style>" + this._css() + "</style><ha-card><div class=\"wrap\">" +
-        vis.map((it) => this._chip(it)).join("") + "</div></ha-card>"
-      : "";
-  }
-
-  _chip(it) {
-    return (
-      '<button class="chip' + (this._on(it.helper) ? " sel" : "") + '" data-h="' +
-        this._esc(it.helper) + '" style="--ac:' +
-        this._esc(it.accent || "#60a5fa") + '" aria-label="Show ' + this._esc(it.name || "") + '">' +
-      '<span class="trace"></span>' +
-      '<ha-icon icon="' + this._esc(it.icon || "mdi:home-outline") + '"></ha-icon>' +
-      '<span class="cname">' + this._esc(it.name || it.helper) + "</span>" +
-      "</button>"
-    );
-  }
-
-  _click(ev) {
-    const chip = ev.target.closest("[data-h]");
-    if (!chip) return;
-    this._hass.callService("input_boolean", "toggle", { entity_id: chip.dataset.h });
-  }
-
-  _css() {
-    return `
-      :host { display: block; }
-      ha-card { display: block; padding: 6px 8px; border-radius: 14px; }
-      .wrap { display: flex; flex-wrap: wrap; gap: 6px; }
-      .chip {
-        position: relative;
-        display: flex; align-items: center; gap: 7px;
-        padding: 7px 13px 7px 12px;
-        border-radius: 12px;
-        border: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
-        background:
-          linear-gradient(90deg, color-mix(in srgb, var(--ac) 10%, transparent), transparent),
-          color-mix(in srgb, var(--primary-text-color) 4%, transparent);
-        color: var(--primary-text-color);
-        font: inherit; font-size: 11.5px; font-weight: 500;
-        cursor: pointer;
-        transition: border-color .12s ease;
-      }
-      .chip:hover { border-color: color-mix(in srgb, var(--ac) 50%, transparent); }
-      .chip.sel {
-        border-color: color-mix(in srgb, var(--ac) 70%, transparent);
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ac) 30%, transparent);
-        background:
-          linear-gradient(90deg, color-mix(in srgb, var(--ac) 22%, transparent), transparent),
-          color-mix(in srgb, var(--primary-text-color) 6%, transparent);
-      }
-      .chip:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-      .chip ha-icon { --mdc-icon-size: 16px; color: var(--ac); opacity: .8; flex: none; }
-      .cname { white-space: nowrap; }
-      .trace {
-        position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
-        border-radius: 0 3px 3px 0;
-        background: linear-gradient(180deg, var(--ac), color-mix(in srgb, var(--ac) 25%, transparent));
-        opacity: .75;
-      }
-      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-    `;
-  }
-
-  _esc(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (ch) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    })[ch]);
-  }
-}
-
-if (!customElements.get("hierarchy-area-chips")) {
-  customElements.define("hierarchy-area-chips", HierarchyAreaChips);
-}
-
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "hierarchy-area-chips",
-  name: "Hierarchy Area Chips",
-  description: "One chip per idle area; tapping it reveals that area card.",
-  preview: false,
-  documentationURL: "https://github.com/RenanzAz/glance-plus",
-});
