@@ -33,7 +33,7 @@ const HA_ICON = {
   cover: "mdi:window-shutter",
 };
 
-const VERSION = "1.16.0";
+const VERSION = "1.17.0";
 
 // One rule for "does this control hold the area open?".
 // Explicit hold wins; switches hold by default; lamps only in a switch-less area.
@@ -162,6 +162,7 @@ class HierarchyAreaCard extends HTMLElement {
     this._config = config;
     this._showHelper = config.show_helper || null;
     this._headerStyle = config.header_style === "title" ? "title" : "inside";
+    this._autoSize = config.auto_size === true;
     this._hideNameOn = config.hide_name_on !== false;
     this._size = ["small", "medium", "large"].includes(config.size) ? config.size : "medium";
     this._secondaryInfo = ["none", "last-changed", "last-updated"].includes(config.secondary_info)
@@ -190,6 +191,7 @@ class HierarchyAreaCard extends HTMLElement {
   }
 
   connectedCallback() {
+    this._applySize();
     HA_TICKERS.add(this);
     HA_TICK_START();
   }
@@ -261,6 +263,16 @@ class HierarchyAreaCard extends HTMLElement {
     return !!this._showHelper && this._isOn(this._showHelper);
   }
 
+  // Auto size: half width while collapsed, full width when expanded or shown
+  // by the helper. Applied to the sections grid item (hui-card).
+  _applySize() {
+    if (!this._autoSize) return;
+    const p = this.parentElement;
+    if (!p || p.tagName !== "HUI-CARD" || !p.style) return;
+    const v = "span " + (this._isOpen() ? 12 : 6);
+    if (p.style.gridColumn !== v) p.style.gridColumn = v;
+  }
+
   // Shared floor helper: every card opens. A tap collapses this card only.
   _isOpen() {
     return this._override ? this._open : this._open || this._helperOn();
@@ -301,7 +313,10 @@ class HierarchyAreaCard extends HTMLElement {
     const accent = this._accent(this._config.accent || "var(--accent-color, #818cf8)");
     const name = this._config.name || "Area";
     const icon = this._config.icon || "mdi:home-outline";
-    const cols = Math.max(1, Math.min(Number(this._config.columns) || 4, 99));
+    const wantCols = Math.max(1, Math.min(Number(this._config.columns) || 4, 99));
+    // Collapsed: let the visible tiles fill the row instead of leaving empty
+    // trailing columns in a half-width card.
+    const cols = open ? wantCols : Math.min(wantCols, Math.max(1, vis.length));
     const inside = this._headerStyle === "inside";
 
     let body = '<div class="body">';
@@ -331,6 +346,7 @@ class HierarchyAreaCard extends HTMLElement {
           : "") +
       "</div>";
 
+    this._applySize();
     this.shadowRoot.innerHTML =
       "<style>" + this._css() + "</style>" +
       '<div class="area ' + this._size + (inside ? " inside" : " title") +
@@ -567,7 +583,7 @@ class HierarchyAreaCard extends HTMLElement {
       :host { display: block; }
       ha-card {
         display: block;
-        padding: 6px 8px;
+        padding: 6px;
         border-radius: 14px;
         overflow: hidden;
       }
@@ -632,7 +648,7 @@ class HierarchyAreaCard extends HTMLElement {
       .tile .tname { flex: 1; min-width: 0; text-align: center; }
       .tile .tsub {
         flex: none; margin-left: 2px;
-        font-size: calc(11px * var(--k, 1)); font-weight: 500;
+        font-size: calc(10px * var(--k, 1)); font-weight: 500;
         color: var(--secondary-text-color); opacity: .8;
       }
       .tile ha-icon { --mdc-icon-size: calc(14px * var(--k, 1)); color: var(--c); flex: none; }
@@ -673,10 +689,10 @@ class HierarchyAreaCard extends HTMLElement {
       .brail.dead { opacity: .45; }
       .brail:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; border-radius: 6px; }
       .bname {
-        font-size: calc(11px * var(--k, 1)); font-weight: 600; line-height: 1.05; text-align: center;
+        font-size: calc(10px * var(--k, 1)); font-weight: 600; line-height: 1.05; text-align: center;
         overflow: hidden; overflow-wrap: anywhere;
       }
-      .btime { font-size: calc(11px * var(--k, 1)); line-height: 1.1; opacity: .8; white-space: nowrap; text-align: center; }
+      .btime { font-size: calc(10px * var(--k, 1)); line-height: 1.1; opacity: .8; white-space: nowrap; text-align: center; }
       .kids {
         display: grid; grid-template-columns: repeat(var(--kw, 1), minmax(0, 1fr));
         gap: calc(4px * var(--k, 1));
@@ -694,7 +710,7 @@ class HierarchyAreaCard extends HTMLElement {
           color-mix(in srgb, var(--c) 15%, transparent) var(--pct, 0%),
           color-mix(in srgb, var(--primary-text-color) 4%, transparent) 0);
       }
-      .ktime { font-size: calc(11px * var(--k, 1)); color: var(--secondary-text-color); white-space: nowrap; z-index: 2; pointer-events: none; }
+      .ktime { font-size: calc(10px * var(--k, 1)); color: var(--secondary-text-color); white-space: nowrap; z-index: 2; pointer-events: none; }
       .kname {
         flex: 1; min-width: 0;
         font-size: calc(11.5px * var(--k, 1)); font-weight: 600; color: var(--primary-text-color);
@@ -703,7 +719,7 @@ class HierarchyAreaCard extends HTMLElement {
         z-index: 2; pointer-events: none;
       }
       .kpct {
-        flex: none; font-size: calc(11px * var(--k, 1));
+        flex: none; font-size: calc(10px * var(--k, 1));
         color: var(--secondary-text-color); z-index: 2; pointer-events: none;
       }
       .kidbox.emb.has-time .kpct { display: none; }
@@ -1213,6 +1229,9 @@ class HierarchyAreaEditor extends HTMLElement {
         ["inside", "Inside the card"],
         ["title", "Title, outside the card"],
       ], (v) => this._set("header_style", v === "inside" ? "" : v))),
+      this._row("Auto size", this._bool(this._config.auto_size === true, (v) => {
+        this._set("auto_size", v);
+      })),
       hideName,
       hideHint,
       this._row("Show helper", this._picker("ha-entity-picker", this._config.show_helper, (v) => {
@@ -1222,7 +1241,7 @@ class HierarchyAreaEditor extends HTMLElement {
     const hint = document.createElement("div");
     hint.className = "hint";
     hint.textContent =
-      "Columns = tiles per row (default 4). Secondary info = the timestamp shown with names.";
+      "Auto size = 6 columns while collapsed, 12 when expanded or shown by the helper. Columns = tiles per row.";
     card.append(hint);
     this._warnEl = document.createElement("div");
     this._warnEl.className = "hint";

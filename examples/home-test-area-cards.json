@@ -60,7 +60,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -117,7 +118,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -150,7 +152,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -234,7 +237,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -277,7 +281,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "heading",
@@ -398,7 +403,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -452,7 +458,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -521,7 +528,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -567,7 +575,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -600,7 +609,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -633,7 +643,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -666,7 +677,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "heading",
@@ -722,7 +734,8 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  },
  {
   "type": "custom:hierarchy-area",
@@ -755,6 +768,7 @@
      }
     ]
    }
-  ]
+  ],
+  "auto_size": true
  }
 ]
