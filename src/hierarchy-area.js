@@ -33,7 +33,7 @@ const HA_ICON = {
   cover: "mdi:window-shutter",
 };
 
-const VERSION = "1.17.0";
+const VERSION = "1.17.1";
 
 // One rule for "does this control hold the area open?".
 // Explicit hold wins; switches hold by default; lamps only in a switch-less area.
@@ -583,7 +583,8 @@ class HierarchyAreaCard extends HTMLElement {
       :host { display: block; }
       ha-card {
         display: block;
-        padding: 6px;
+        padding: 6px 8px;
+        margin: 4px;
         border-radius: 14px;
         overflow: hidden;
       }

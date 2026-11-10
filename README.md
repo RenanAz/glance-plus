@@ -145,7 +145,8 @@ One area per card, stacked like cards. Replaces the multi-area card below in
 - **Auto size.** `auto_size: true` (editor "Auto size") makes a collapsed card
   span 6 of 12 columns; expanding it, or showing it via a helper, spans 12.
   Collapsed grids shrink to the number of visible tiles, so a half-width card
-  has no empty trailing columns.
+  has no empty trailing columns. Cards carry a 4 px outer margin, so two
+  half-width neighbours never touch.
 - **Size is dashboard-owned.** Cards follow `grid_options` when auto size is off.
 - **Grid and size.** `columns: 4` (changeable). `size: small | medium | large`
   (default **medium**) scales the area header font/icon plus tile height,
