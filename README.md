@@ -16,6 +16,12 @@ Three cards ship in this repo as single-file ES modules (no build step):
 | Glance Plus grids | `custom:glance-plus` | `src/glance-plus.js` |
 | Hierarchy Area | `custom:hierarchy-area` | `src/hierarchy-area.js` |
 | Hierarchy Areas (superseded) | `custom:hierarchy-areas` | `src/hierarchy-areas.js` |
+| Glance Areas (Phase 1) | `custom:glance-areas` | `src/glance-areas.js` |
+
+`glance-areas` shows one floor as a grid of portrait area tiles (readout, live
+power, domain circles, opening pills). The contract lives in
+[`docs/glance-areas-PLAN.md`](docs/glance-areas-PLAN.md); Phase 1 is the
+collapsed grid, the vertical expansion / detail panel is not built yet.
 
 **Manual:** copy the sources you want into `config/www/` and add each one as a
 Lovelace **module** resource (Settings → Dashboards → ⋮ → Resources):

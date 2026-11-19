@@ -1,0 +1,47 @@
+[
+  {
+    "type": "custom:glance-areas",
+    "floor": "ground",
+    "areas_mode": "explicit",
+    "columns": 3,
+    "tile_height": 260,
+    "areas": [
+      { "area": "58323f81b5b3402e9e712550e9e83118", "name": "Hall de entrada" },
+      { "area": "hospedes" },
+      { "area": "cozinha_hospedes" },
+      { "area": "banheiro_terreo" },
+      { "area": "office_michelle" },
+      { "area": "garage" }
+    ]
+  },
+  {
+    "type": "custom:glance-areas",
+    "floor": "first",
+    "areas_mode": "explicit",
+    "columns": 3,
+    "tile_height": 260,
+    "areas": [
+      { "area": "sala" },
+      { "area": "f780495f59804abe974d4f8eff722a3e", "name": "Quarto Casal" },
+      { "area": "2dc0ae0069774a2fbe109a6a5c8573cf", "name": "Cozinha" },
+      { "area": "banheiro_casal" },
+      { "area": "04e2fdffbe064035a1ef4938f22ad026", "name": "Quarto Sophia" },
+      { "area": "banheiro_sophia" },
+      { "area": "balcony", "name": "Varanda" },
+      { "area": "corredor" },
+      { "area": "servico" }
+    ]
+  },
+  {
+    "type": "custom:glance-areas",
+    "floor": "second",
+    "areas_mode": "explicit",
+    "columns": 3,
+    "tile_height": 260,
+    "areas": [
+      { "area": "office" },
+      { "area": "sotao" },
+      { "area": "banheiro_office_renan" }
+    ]
+  }
+]

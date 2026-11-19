@@ -79,6 +79,10 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 15 | 2026-11-02 | `blocks` inside a card: optional label/icon, own `columns`, and `color`/`background`/`show_if` defaults for its cells. Rendered in config order; an empty block is skipped with its label. |
 | 16 | 2026-11-02 | Supersedes 12: visual editor shipped as `glance-plus-editor` in the same module — card options, cells, blocks, colour swatches, entity/icon pickers. |
 | 17 | 2026-11-02 | Cell text takes `\n` as line breaks; title defaults to left-aligned. |
+| 18 | 2026-11-19 | New card `glance-areas` (one floor per card) starts as Phase 0+1 of `docs/glance-areas-PLAN.md`; built on branch `mvp`, test surface is the `OpenCode MVP` view on `home-test`. |
+| 19 | 2026-11-19 | Phase 1 keeps the mockup's accent-tinted circles instead of per-domain colours (D12): tint still means "active member", and the badge stays amber. |
+| 20 | 2026-11-19 | Registry-derived circles skip `entity_category: config/diagnostic` and hidden/disabled entities; otherwise a room's Tuya config switches would inflate the lights badge. |
+| 21 | 2026-11-19 | In Phase 1, `behavior: focus` opens HA's own more-info dialog as the stand-in for the Phase 2 detail panel; the chevron is rendered but inert. |
 
 ## 7. Open questions
 

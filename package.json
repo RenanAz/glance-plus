@@ -20,7 +20,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/hierarchy-area.mjs && node test/editor-area.mjs"
+    "test": "node test/hierarchy-area.mjs && node test/editor-area.mjs && node test/glance-areas.mjs"
   },
   "devDependencies": {
     "jsdom": "^30.1.3"
