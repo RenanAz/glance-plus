@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { cards } from "../examples/home-test-cards.mjs";
-const TOKEN = readFileSync("./.secrets/testha_token", "utf8").trim();
+const TOKEN = (process.env.HA_TOKEN || readFileSync(process.env.HA_TOKEN_FILE || "./.secrets/testha_token", "utf8")).trim();
+const WS_URL = process.env.HA_WS_URL || "ws://homeassistant.local:8123/api/websocket";
 
 // --- load card class with DOM stubs -------------------------------------
 globalThis.console.info = () => {};

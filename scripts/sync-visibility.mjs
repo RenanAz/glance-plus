@@ -10,54 +10,11 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { call, bestPracticeKey } from "./mcp.mjs";
 
-const [, , urlPath = "home-test", dryFlag] = process.argv;
+const [, , urlPath, dryFlag] = process.argv;
 const dry = dryFlag === "--dry";
-const URL = process.env.HA_MCP_URL;
-if (!URL) throw new Error("set HA_MCP_URL to the ha-mcp endpoint");
-
-let idc = 1;
-async function call(tool, args = {}) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 300000);
-  let body;
-  try {
-    const resp = await fetch(URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: idc++, method: "tools/call", params: { name: tool, arguments: args } }),
-      signal: ctrl.signal,
-    });
-    body = await resp.text();
-  } finally {
-    clearTimeout(t);
-  }
-  const texts = [];
-  if (body.trim().startsWith("{")) texts.push(body.trim());
-  else for (const line of body.split("\n")) if (line.startsWith("data: ")) texts.push(line.slice(6));
-  let chosen;
-  for (const txt of texts) {
-    let m;
-    try {
-      m = JSON.parse(txt);
-    } catch {
-      continue;
-    }
-    if (m.error) throw new Error("MCP error: " + JSON.stringify(m.error));
-    if (m.result) chosen = m.result;
-  }
-  if (!chosen) throw new Error("No result: " + body.slice(0, 400));
-  for (const b of chosen.content ?? []) {
-    if (b.type === "text") {
-      try {
-        return JSON.parse(b.text);
-      } catch {
-        return b.text;
-      }
-    }
-  }
-  return chosen;
-}
+if (!urlPath) throw new Error("usage: node scripts/sync-visibility.mjs <dashboard-url-path> [--dry]");
 
 // Load the card source headlessly and expose its pure rules.
 function loadRules() {
@@ -118,9 +75,7 @@ for (const view of cfg.views || []) {
 console.log(`cards=${cards} manual=${manual} changes=${touched}`);
 if (dry) process.exit(0);
 
-const guide = await call("ha_get_skill_guide", {});
-const key = (guide.content || "").match(/I-HAVE-READ-THE-BEST-PRACTICES-GUIDE-[a-f0-9]+/)?.[0];
-if (!key) throw new Error("best-practice key not found");
+const key = await bestPracticeKey();
 const out = await call("ha_config_set_dashboard", {
   url_path: urlPath,
   config: cfg,

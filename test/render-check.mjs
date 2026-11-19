@@ -1,4 +1,4 @@
-import { call } from "/workspace/HA/battery_morning_audit/mcp.mjs";
+import { call } from "../scripts/mcp.mjs";
 import { templateFor } from "./load.mjs";
 import { cards } from "../examples/home-test-cards.mjs";
 

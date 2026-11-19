@@ -4,8 +4,37 @@ A Lovelace card for compact, formally aligned grids of house state: per-cell
 filtering, Jinja labels/colours, a small centred header that toggles a `show_*`
 helper, and a card-level background.
 
-Status: pre-release, running live on `/home-test`. Requirements and decisions
-live in [REQUIREMENTS.md](REQUIREMENTS.md).
+Status: pre-release (1.17.2). Requirements and decisions live in
+[REQUIREMENTS.md](REQUIREMENTS.md). Examples are anonymised demo configs.
+
+## Installation
+
+Three cards ship in this repo as single-file ES modules (no build step):
+
+| Card | Element | Source |
+|------|---------|--------|
+| Glance Plus grids | `custom:glance-plus` | `src/glance-plus.js` |
+| Hierarchy Area | `custom:hierarchy-area` | `src/hierarchy-area.js` |
+| Hierarchy Areas (superseded) | `custom:hierarchy-areas` | `src/hierarchy-areas.js` |
+
+**Manual:** copy the sources you want into `config/www/` and add each one as a
+Lovelace **module** resource (Settings → Dashboards → ⋮ → Resources):
+
+```yaml
+url: /local/glance-plus.js
+type: module
+```
+
+Then add the card in the dashboard UI or in YAML. Renaming a file is fine; the
+element name is defined inside the module.
+
+**HACS:** add this repo as a custom repository of type *Lovelace*
+(HACS → Frontend → ⋮ → Custom repositories) and install it, then add the
+source file(s) from the installed folder as module resources. HACS installs the
+whole repo; the JS lives under `src/`, not at the archive root.
+
+Requires Home Assistant 2024.1+ (Lovelace resources, `ha-form`). For the
+`show_*` toggles used by the examples, create `input_boolean` helpers.
 
 ## Config
 
@@ -81,18 +110,16 @@ for its cells; a cell value always wins.
 - Time templates (`now()`) never change a state signature; the card re-renders
   them on a 60 s tick.
 
-## Deploy (live-first)
+## Deploy (development)
 
+This repo is the source of truth; the cards are served to Home Assistant as
+inline Lovelace **module** resources. Edit a file under `src/`, apply it to the
+resource (dashboard resources editor, or your own tooling), then hard-refresh
+the browser — inline modules are cached.
 
-Live HA serves this card as an inline Lovelace resource
-`7bb0f762cab94e569fefd78ebe203a46` (`module`).
-
-```bash
-node /workspace/HA/apply-live-card.mjs /workspace/glance-plus/src/glance-plus.js GLANCE-PLUS
-```
-
-Backs up the current live content to `/workspace/HA/live_card_backups/` first.
-Only build/commit/push after the user confirms the change on live.
+`scripts/sync-visibility.mjs` and `scripts/patch-home-test.mjs` show how to
+drive a dashboard through ha-mcp; both need `HA_MCP_URL` and are author dev
+tools, not required for normal use.
 
 ## Visual editor
 
@@ -113,14 +140,15 @@ Not yet: drag-and-drop reordering of cells, live preview of Jinja while typing.
 Run from the repo root:
 
 ```bash
-node test/render-check.mjs    # renders examples/home-test-cards.mjs on live HA (ha_eval_template)
+node test/render-check.mjs    # renders the example cards against a live HA (needs HA_MCP_URL)
 node test/paint.mjs           # builds card HTML with stubbed states; checks header/blocks/lines
 node test/editor.mjs          # jsdom test of the visual editor (npm i jsdom first)
-node test/fetch-subscription.mjs  # render_template subscription path against the test HA
+HA_WS_URL=... HA_TOKEN=... node test/fetch-subscription.mjs  # render_template subscription path
 ```
 
-`examples/home-test-cards.mjs` is the source of the four cards currently on
-`/home-test`; `scripts/patch-home-test.mjs` writes them to that dashboard.
+`examples/home-test-cards.mjs` is a demo config (rooms and entity names are
+generic); `scripts/patch-home-test.mjs` shows how to push such a section to a
+dashboard.
 
 ---
 
@@ -191,11 +219,8 @@ One area per card, stacked like cards. Replaces the multi-area card below in
   (boolean); each area has its own accent for the left trace and icon. All
   names are centred. Secondary text is 10 px at Medium.
 
-Live inline resource: `57aef9a9bb594ebeaa09bee679a90244` (`module`).
-
-```bash
-node /workspace/HA/apply-live-card.mjs /workspace/glance-plus/src/hierarchy-area.js HierarchyAreaCard
-```
+Load `src/hierarchy-area.js` as a Lovelace `module` resource (see
+[Installation](#installation)).
 
 ```yaml
 type: custom:hierarchy-area
@@ -259,11 +284,8 @@ A room/floor switch board. Idle areas stay collapsed as pills at the top; areas
 with anything on expand below. Same left colour-trace language as the Hierarchy
 Power/Energy cards.
 
-Live inline resource: `246daea675f54b17aff4f50e5325679c` (`module`).
-
-```bash
-node /workspace/HA/apply-live-card.mjs /workspace/glance-plus/src/hierarchy-areas.js HierarchyAreasCard
-```
+Load `src/hierarchy-areas.js` as a Lovelace `module` resource. Kept for
+reference; `custom:hierarchy-area` supersedes it.
 
 ## Behaviour
 
@@ -325,6 +347,5 @@ device chips underneath) exactly like the reference mock.
 node test/hierarchy-areas.mjs   # model + interaction self-check, no browser
 ```
 
-`/workspace/HA/glance-plus/` holds a browser preview harness:
-`node make-preview.mjs` pulls the live states into `preview.html`, then open it
-(normal + "show all" variants). `preview.png` is the rendered result.
+The browser preview harness lives outside this repo (it pulls live states from
+a running Home Assistant); it is not needed to use the cards.

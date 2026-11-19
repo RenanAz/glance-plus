@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const calls = [];
@@ -18,7 +19,7 @@ const ctx = {
   setTimeout, clearTimeout,
 };
 vm.createContext(ctx);
-vm.runInContext(readFileSync("/workspace/glance-plus/src/hierarchy-areas.js", "utf8") + "\nthis.HierarchyAreasCard = HierarchyAreasCard;", ctx);
+vm.runInContext(readFileSync(fileURLToPath(new URL("../src/hierarchy-areas.js", import.meta.url)), "utf8") + "\nthis.HierarchyAreasCard = HierarchyAreasCard;", ctx);
 const Card = ctx.HierarchyAreasCard;
 if (!Card) throw new Error("class not defined");
 

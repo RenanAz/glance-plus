@@ -8,7 +8,7 @@
  * declared as one `plates[]` entry, and a rocker can own `downstream` devices
  * (LED strips fed by that switch).
  *
- * https://github.com/RenanzAz/hierarchy-cards
+ * https://github.com/RenanAz/glance-plus
  */
 
 const HA_ACCENT = [
@@ -656,7 +656,7 @@ window.customCards.push({
   name: "Hierarchy Areas",
   description: "Area switch board: idle areas as pills, active areas expand, wall plates and downstream devices.",
   preview: false,
-  documentationURL: "https://github.com/RenanzAz/hierarchy-cards",
+  documentationURL: "https://github.com/RenanAz/glance-plus",
 });
 
 console.info("%c HIERARCHY-AREAS %c 1.0.0 ", "background:#0f766e;color:#fff", "");

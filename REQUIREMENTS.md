@@ -3,7 +3,7 @@
 Living document. Append a row to **Decisions** and to **Changelog** whenever a
 requirement changes; do not rewrite history.
 
-Status: v1 card written and running live on `/home-test` (section 1), awaiting
+Status: v1 card written and in daily use; stage 1 confirmed
 user verdict. Stage 1 (glance + auto-entities) confirmed the limits that justify
 the card.
 
@@ -53,7 +53,7 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 ## 5. Constraints
 
 - Live-first workflow: edit `src/`, apply to the live inline resource via
-  `/workspace/HA/apply-live-card.mjs`, user confirms on `/home-test`, then
+  the live inline resource, confirm on a test dashboard, then
   build + commit + push.
 - Dashboards are config-only; no entity/statistics history is touched.
 - Test surface: dashboard `home-test` (`/home-test`), Home view copy.
@@ -99,9 +99,8 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 - 2026-11-02 — v1 card implemented (`src/glance-plus.js`): fixed grid, one batched
   `render_template` call, Jinja title/name/icon/colour/background/show_if, header
   click toggles `toggle_entity`, card-level `show_if`, error badge keeps the last
-  good render. Deployed as inline resource
-  `7bb0f762cab94e569fefd78ebe203a46` and used for the four category cards in
-  `home-test` section 1 (decisions 8–13).
+  good render. Deployed as an inline resource and used for the four category
+  cards in a test dashboard (decisions 8–13).
 - 2026-11-02 — bugfix: HA 2026 `render_template` is a subscription — the command
   acks `result: null` and the render comes as an `event` (`{result, listeners}`
   or `{error}`). `_renderOnce` now subscribes via

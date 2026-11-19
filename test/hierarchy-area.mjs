@@ -1,6 +1,7 @@
 // Self-check for hierarchy-area: visibility rules and master/toggle wiring.
 // No browser: stubs the handful of DOM APIs the card touches.
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const calls = [];
@@ -25,7 +26,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext(
-  readFileSync("/workspace/glance-plus/src/hierarchy-area.js", "utf8") +
+  readFileSync(fileURLToPath(new URL("../src/hierarchy-area.js", import.meta.url)), "utf8") +
     "\nthis.HierarchyAreaCard = HierarchyAreaCard;",
   ctx
 );

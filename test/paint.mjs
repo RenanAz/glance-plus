@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
-import { call } from "/workspace/HA/battery_morning_audit/mcp.mjs";
+import { fileURLToPath } from "node:url";
+import { call } from "../scripts/mcp.mjs";
 import { cards } from "../examples/home-test-cards.mjs";
 globalThis.console.info = () => {};
 globalThis.HTMLElement = class { constructor(){ this.style={}; } attachShadow(){ this.shadowRoot={ innerHTML:"", addEventListener(){}, querySelector: () => null }; } };
 globalThis.customElements = { get: () => null, define: () => {} };
 globalThis.window = {};
 globalThis.document = { createElement: () => ({}) };
-new Function(readFileSync("src/glance-plus.js", "utf8").replace(/GlancePlusCard/g, "GPC") + "\nglobalThis.__C = GPC;\n")();
+new Function(readFileSync(fileURLToPath(new URL("../src/glance-plus.js", import.meta.url)), "utf8").replace(/GlancePlusCard/g, "GPC") + "\nglobalThis.__C = GPC;\n")();
 const Card = globalThis.__C;
 
 for (const card of cards) {

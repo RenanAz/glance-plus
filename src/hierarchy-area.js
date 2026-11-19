@@ -12,7 +12,7 @@
  * The area header (icon + name + power) is a title above the card by default;
  * `header_style: inside` puts it inside the card instead.
  *
- * https://github.com/RenanzAz/glance-plus
+ * https://github.com/RenanAz/glance-plus
  */
 
 const HA_ON_COLOR = {
@@ -784,7 +784,7 @@ window.customCards.push({
   name: "Hierarchy Area",
   description: "One area per card: compact header, ON entities by default, tap to show everything.",
   preview: false,
-  documentationURL: "https://github.com/RenanzAz/glance-plus",
+  documentationURL: "https://github.com/RenanAz/glance-plus",
 });
 
 console.info("%c HIERARCHY-AREA %c " + VERSION + " ", "background:#0f766e;color:#fff", "");
