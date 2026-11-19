@@ -452,34 +452,3 @@ console.log("ok: hierarchy-area self-check passed");
   if (ids.includes("light.kid")) throw new Error("Off must never touch downstreams");
   console.log("ok: Off scope");
 }
-
-// Auto size: half width collapsed, full width expanded or shown by the helper.
-{
-  const c = new ctx.HierarchyAreaCard();
-  const host = { tagName: "HUI-CARD", style: {} };
-  c.parentElement = host;
-  const hass = {
-    states: {
-      "switch.a": { state: "off", attributes: {} },
-      "input_boolean.f": { state: "off", attributes: {} },
-    },
-    callService() {},
-  };
-  c.setConfig({
-    name: "Auto",
-    auto_size: true,
-    show_helper: "input_boolean.f",
-    controls: [{ entity: "switch.a" }],
-  });
-  c.hass = hass;
-  if (host.style.gridColumn !== "span 6") throw new Error("collapsed auto size must be span 6: " + host.style.gridColumn);
-  c._click({ target: { closest: (s) => (s === "[data-open]" ? {} : null) } });
-  if (host.style.gridColumn !== "span 12") throw new Error("expanded auto size must be span 12");
-  c._click({ target: { closest: (s) => (s === "[data-open]" ? {} : null) } });
-  if (host.style.gridColumn !== "span 6") throw new Error("collapsed again must return to span 6");
-  hass.states["input_boolean.f"].state = "on";
-  c._sig = "";
-  c.hass = hass;
-  if (host.style.gridColumn !== "span 12") throw new Error("helper on must take the full width");
-  console.log("ok: auto size");
-}

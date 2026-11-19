@@ -142,12 +142,8 @@ One area per card, stacked like cards. Replaces the multi-area card below in
   after release. The icon toggles. Hold anywhere for more-info. Values are
   clamped to 1..100 and use a trailing throttled send, so the released value
   always lands.
-- **Auto size.** `auto_size: true` (editor "Auto size") makes a collapsed card
-  span 6 of 12 columns; expanding it, or showing it via a helper, spans 12.
-  Collapsed grids shrink to the number of visible tiles, so a half-width card
-  has no empty trailing columns. Cards carry a 4 px outer margin, so two
-  half-width neighbours never touch.
-- **Size is dashboard-owned.** Cards follow `grid_options` when auto size is off.
+- **Size is dashboard-owned.** Cards render full width, follow `grid_options`
+  and carry a 4 px outer margin.
 - **Grid and size.** `columns: 4` (changeable). `size: small | medium | large`
   (default **medium**) scales the area header font/icon plus tile height,
   padding, fonts, icons, rail and gaps together, so the proportions never
@@ -208,7 +204,6 @@ icon: mdi:fridge-outline
 accent: "#34d399"
 columns: 4
 size: medium             # small | medium | large
-auto_size: true          # 6 col collapsed, 12 expanded
 header_style: inside     # default; title = above the card
 controls:
   - entity: switch.switch_cozinha_principal_left
