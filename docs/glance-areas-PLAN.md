@@ -737,3 +737,8 @@ and compare against the two renders each phase.
 | 7 | 2026-11-19 | Collapsed controls are domain circles with count badges + two opening pills; `hold` re-pointed to membership (D11, D12). |
 | 8 | 2026-11-19 | Missing data is omitted in the tile, not placeholdered (FR-06, FR-07). |
 | 9 | 2026-11-19 | Panel gains spots, presence and light-group dimmer/colour renderers (FR-15, FR-17, FR-18). |
+| 10 | 2026-11-19 | **Phase 1 built** on branch `mvp` (live view `home-test` → `OpenCode MVP`). §8 correction: re-measured against `mockup-collapsed.png` — area icon ≈36 px (not 28) and tile padding ≈18 px (not 14); implemented as 34/16 so three columns still fit a 768 px section. |
+| 11 | 2026-11-19 | D12 amended: circles use the mockup's **accent** tint (violet), not per-domain colours. The tint still means "has active members"; badges stay amber. |
+| 12 | 2026-11-19 | Registry-derived control pools skip `entity_category: config/diagnostic` and hidden/disabled entities — otherwise a room's Tuya config switches inflate the lights badge. |
+| 13 | 2026-11-19 | Phase 1 `focus` opens HA's own more-info dialog as the stand-in for the Phase 2 panel; the chevron is rendered but inert (`aria-disabled`). |
+| 14 | 2026-11-19 | FR-11 "expand" cannot land before FR-12/13 (the panel is Phase 2), so Phase 1 ships the affordance only. Recorded as a contract conflict. |
