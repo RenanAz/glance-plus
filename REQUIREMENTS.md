@@ -83,6 +83,10 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 19 | 2026-11-19 | Phase 1 keeps the mockup's accent-tinted circles instead of per-domain colours (D12): tint still means "active member", and the badge stays amber. |
 | 20 | 2026-11-19 | Registry-derived circles skip `entity_category: config/diagnostic` and hidden/disabled entities; otherwise a room's Tuya config switches would inflate the lights badge. |
 | 21 | 2026-11-19 | In Phase 1, `behavior: focus` opens HA's own more-info dialog as the stand-in for the Phase 2 detail panel; the chevron is rendered but inert. |
+| 22 | 2026-11-19 | Lights circle adopts `hierarchy-area`'s hold rule: **only holders are counted and only they are switched off**. `controls[]` (entity, `hold`, `downstream`) on an area overrides the registry pool; a downstream device is never counted and never switched off on its own. |
+| 23 | 2026-11-19 | A power meter at ~0 W draws no line (rounded to 0 W). |
+| 24 | 2026-11-19 | **Debt:** `focus` → more-info is a Phase 1 stand-in. Decide "focus/expand" vs "toggle" per circle before Phase 2 ships controls. |
+| 25 | 2026-11-19 | Development moved to the **test instance** (192.168.70.103): dashboard `home-test` (HomeTest, views Home/Lab/Wide) with mock covers, lights, climate, doors/windows and temp/humidity. |
 
 ## 7. Open questions
 

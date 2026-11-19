@@ -166,6 +166,24 @@ function gaOpenings(raw) {
   };
 }
 
+// hierarchy-area's control list, reused: `hold` decides whether a switch counts
+// as a holder (the lights circle badge and the toggle_off set). A downstream
+// device is owned by its upstream switch and is never counted or switched off
+// on its own.
+function gaControls(raw) {
+  const list = GA_ARR(raw)
+    .map((x) => (typeof x === "string" ? { entity: x } : x || {}))
+    .filter((c) => GA_STR(c.entity));
+  const hasSwitch = list.some((c) => GA_STR(c.entity).startsWith("switch."));
+  return list.map((c) => ({
+    entity: GA_STR(c.entity),
+    hold: c.hold !== undefined ? c.hold !== false : (GA_STR(c.entity).startsWith("switch.") || !hasSwitch),
+    downstream: GA_ARR(c.downstream)
+      .map((d) => GA_STR(d && d.entity ? d.entity : d))
+      .filter(Boolean),
+  }));
+}
+
 function gaArea(raw) {
   const a = typeof raw === "string" ? { area: raw } : raw || {};
   const id = GA_STR(a.area || a.area_id);
@@ -180,6 +198,7 @@ function gaArea(raw) {
     power: GA_STR(a.power && a.power.entity ? a.power.entity : a.power) || null,
     energy: GA_STR(a.energy && a.energy.entity ? a.energy.entity : a.energy) || null,
     climate: GA_STR(a.climate) || null,
+    controls: gaControls(a.controls),
     circles: gaCircles(a.circles),
     openings: gaOpenings(a.openings),
     bubbles: GA_ARR(a.bubbles).map(GA_STR).filter(Boolean).slice(0, 3),
@@ -461,12 +480,20 @@ class GlanceAreasCard extends HTMLElement {
       const mapped = this._powerByArea().get(entry.area);
       if (mapped != null) watts = mapped;
     }
+    // A meter sitting at ~0 W is not a signal worth a line in a 225 px tile.
+    if (watts != null && Math.round(Math.abs(watts)) === 0) watts = null;
 
     const circles = [];
+    // D11 is an area-level rule: a lamp holds only when the area has no switch
+    // at all. Decide it over the whole control pool, not over a filtered circle.
+    const controlPool = entry.controls.length
+      ? entry.controls.map((c) => c.entity)
+      : (bucket.all || []).filter((id) => /^(light|switch)\./.test(id));
+    const hasSwitch = controlPool.some((id) => id.startsWith("switch."));
     for (const c of entry.circles) {
       const m = this._circleMembers(c, entry, bucket, reg);
       if (!m.length) continue;
-      circles.push(this._circleModel(c, m));
+      circles.push(this._circleModel(c, m, entry, hasSwitch));
       if (circles.length === 3) break;
     }
 
@@ -506,6 +533,10 @@ class GlanceAreasCard extends HTMLElement {
       if (entry.climate) pool = [entry.climate, ...pool.filter((id) => id !== entry.climate)];
     } else if (circle.type === "covers") {
       pool = all.filter((id) => id.startsWith("cover."));
+    } else if (entry.controls.length) {
+      // Declared controls win: same shape as hierarchy-area, so the hold
+      // checkboxes and bundles carry over.
+      pool = entry.controls.map((c) => c.entity);
     } else {
       pool = all.filter((id) => /^(light|switch|fan)\./.test(id));
     }
@@ -515,6 +546,11 @@ class GlanceAreasCard extends HTMLElement {
     }
     const excluded = new Set(circle.exclude);
     pool = pool.filter((id) => !excluded.has(id));
+    // A downstream device is driven by its upstream switch; never treat it as
+    // an independent holder or a toggle_off target.
+    const downstream = new Set();
+    for (const c of entry.controls) for (const d of c.downstream) downstream.add(d);
+    if (circle.type === "lights") pool = pool.filter((id) => !downstream.has(id));
     return pool;
   }
 
@@ -522,21 +558,22 @@ class GlanceAreasCard extends HTMLElement {
     return !!(this._hass && this._hass.states && this._hass.states[id]);
   }
 
-  _circleModel(circle, members) {
+  _circleModel(circle, members, entry, hasSwitch) {
     const h = this._hass;
     let count = 0;
     let icon = GA_CIRCLE_ICON[circle.type] || "mdi:circle-small";
     let activeId = null;
+    const active = [];
     for (const id of members) {
       const st = h.states[id];
       const s = st ? st.state : "";
-      const dom = id.split(".")[0];
       let on = false;
       if (circle.type === "climate") on = GA_CLIMATE_ACTIVE(s);
       else if (circle.type === "covers") on = GA_COVER_OPEN(s);
-      else on = s === "on" && this._holds(circle, id, members);
+      else on = s === "on" && this._holds(circle, id, entry, hasSwitch);
       if (on) {
         count += 1;
+        active.push(id);
         if (!activeId) activeId = id;
       }
     }
@@ -555,15 +592,18 @@ class GlanceAreasCard extends HTMLElement {
       color: GA_DOMAIN_COLOR[circle.type === "covers" ? "cover" : circle.type] || GA_ACCENT,
       first: members[0] || null,
       members,
+      active,
     };
   }
 
-  // Auto hold: a derived pool has no declared "controls", so every light and
-  // switch in the area holds. `hold: true|false` on the circle overrides.
-  _holds(circle, id, members) {
+  // hierarchy-area's hold rule (D11): an explicit `hold` on the control wins,
+  // switches hold by default, lamps only in an area with no switch at all.
+  _holds(circle, id, entry, hasSwitch) {
     if (circle.hold === true) return true;
     if (circle.hold === false) return false;
-    return true;
+    const ctl = entry.controls.find((c) => c.entity === id);
+    if (ctl) return ctl.hold;
+    return id.startsWith("switch.") || !hasSwitch;
   }
 
   _openings(entry, bucket, hass) {
@@ -734,7 +774,7 @@ class GlanceAreasCard extends HTMLElement {
       );
       return;
     }
-    if (circle.behavior === "toggle_off") this._turnOff(cm.members);
+    if (circle.behavior === "toggle_off") this._turnOff(cm.active);
   }
 
   _turnOff(ids) {
@@ -893,6 +933,7 @@ function gaConfigDefaults() {
     power: null,
     energy: null,
     climate: null,
+    controls: [],
     circles: gaCircles(null),
     openings: { doors: [], windows: [] },
     bubbles: [],
@@ -955,6 +996,17 @@ const GAE_CSS = `
   .cname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .csub { margin-left: auto; font-size: 11px; color: var(--secondary-text-color); opacity: .8; }
   .fields { padding: 4px 10px 10px; border-top: 1px solid var(--divider-color, rgba(255,255,255,.1)); }
+  .subhead {
+    margin: 10px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--secondary-text-color);
+  }
+  .ctl {
+    margin: 6px 0; padding: 4px 8px; border-radius: 8px;
+    background: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
+    border: 1px solid var(--divider-color, rgba(255,255,255,.1));
+  }
+  .ctlhd { display: flex; align-items: center; gap: 8px; }
+  .ctlhd .cname { flex: 1; min-width: 0; font-size: 12px; }
   .ver { font-size: 11px; color: var(--secondary-text-color); opacity: .7; }
 `;
 
@@ -1041,6 +1093,38 @@ class GlanceAreasEditor extends HTMLElement {
       return;
     }
     if (!Number.isInteger(i)) return;
+    const area = this._area(i);
+    const ci = Number(b.dataset.c);
+    const di = Number(b.dataset.d);
+    if (act === "addctl" && area) {
+      if (!Array.isArray(area.controls)) area.controls = [];
+      area.controls.push({ entity: "", hold: true, downstream: [] });
+      this._emit();
+      this._build();
+      return;
+    }
+    if (act === "delctl" && area && Array.isArray(area.controls)) {
+      area.controls.splice(ci, 1);
+      if (!area.controls.length) delete area.controls;
+      this._emit();
+      this._build();
+      return;
+    }
+    if (act === "adddown" && area && area.controls && area.controls[ci]) {
+      const c = area.controls[ci];
+      if (!Array.isArray(c.downstream)) c.downstream = [];
+      c.downstream.push("");
+      this._emit();
+      this._build();
+      return;
+    }
+    if (act === "deldown" && area && area.controls && area.controls[ci]) {
+      const c = area.controls[ci];
+      if (Array.isArray(c.downstream)) c.downstream.splice(di, 1);
+      this._emit();
+      this._build();
+      return;
+    }
     if (act === "del") {
       this._config.areas.splice(i, 1);
       this._emit();
@@ -1084,6 +1168,14 @@ class GlanceAreasEditor extends HTMLElement {
     }
     el.value = value ?? options[0][0];
     el.addEventListener("change", () => onDone(el.value));
+    return el;
+  }
+
+  _bool(value, onDone) {
+    const el = document.createElement("input");
+    el.type = "checkbox";
+    el.checked = !!value;
+    el.addEventListener("change", () => onDone(el.checked));
     return el;
   }
 
@@ -1250,10 +1342,87 @@ class GlanceAreasEditor extends HTMLElement {
         this._setArea(i, "power", v ? { entity: v } : "");
       }, { includeDomains: ["sensor"], allowCustomEntity: true }))
     );
+
+    // Lights-circle holders: the hierarchy-area control list, with the same
+    // per-device "holds card" checkbox and downstream ownership.
+    const subHead = document.createElement("div");
+    subHead.className = "subhead";
+    subHead.textContent = "Switches & devices — the lights circle counts holders";
+    fields.append(subHead);
+    const ctls = Array.isArray(a.controls) ? a.controls : [];
+    if (!ctls.length) {
+      const h = document.createElement("div");
+      h.className = "hint";
+      h.textContent =
+        "Auto: every switch in the area holds; lamps hold only when the area has no switch.";
+      fields.append(h);
+    }
+    ctls.forEach((c, ci) => fields.append(this._controlRow(i, ci, c)));
+    fields.append(this._button("+ Device", "addctl", i));
+
     const reset = this._button("Reset overrides to auto", "reset", i, "reset");
     fields.append(reset);
     row.append(fields);
     return row;
+  }
+
+  _controlRow(i, ci, c) {
+    const box = document.createElement("div");
+    box.className = "ctl";
+    const at = () => ((this._config.areas[i] || {}).controls || [])[ci];
+
+    const hd = document.createElement("div");
+    hd.className = "ctlhd";
+    const label = document.createElement("span");
+    label.className = "cname";
+    label.textContent = c.entity || "new device";
+    const del = this._button("✕", "delctl", i, "del");
+    del.dataset.c = String(ci);
+    hd.append(label, del);
+    box.append(hd);
+
+    box.append(
+      this._row("Entity", this._picker("ha-entity-picker", c.entity, (v) => {
+        const cur = at();
+        if (!cur) return;
+        cur.entity = v;
+        label.textContent = v || "new device";
+        this._emit();
+      }, { allowCustomEntity: true })),
+      this._row("Holds card", this._bool(c.hold !== false, (v) => {
+        const cur = at();
+        if (!cur) return;
+        cur.hold = v;
+        this._emit();
+      }))
+    );
+
+    const downs = Array.isArray(c.downstream) ? c.downstream : [];
+    downs.forEach((d, di) => {
+      const wrap = document.createElement("div");
+      wrap.className = "inline";
+      const pick = this._picker("ha-entity-picker", d, (v) => {
+        const cur = at();
+        if (!cur) return;
+        if (!Array.isArray(cur.downstream)) cur.downstream = [];
+        if (v) cur.downstream[di] = v;
+        else cur.downstream.splice(di, 1);
+        this._emit();
+        this._build();
+      }, { allowCustomEntity: true });
+      const rm = this._button("✕", "deldown", i, "del");
+      rm.dataset.c = String(ci);
+      rm.dataset.d = String(di);
+      wrap.append(pick, rm);
+      box.append(this._row(di === 0 ? "Downstream" : "", wrap));
+    });
+    const addDown = this._button("+ Downstream", "adddown", i);
+    addDown.dataset.c = String(ci);
+    const downWrap = document.createElement("div");
+    downWrap.className = "btnrow";
+    downWrap.append(addDown);
+    box.append(this._row("", downWrap));
+    return box;
   }
 }
 

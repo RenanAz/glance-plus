@@ -468,6 +468,12 @@ areas:
     power: { entity: sensor.sala_power }        # else Energy prefs (D6)
     energy: { entity: sensor.sala_energy_today }
     climate: climate.sala_ac
+    controls:                     # hierarchy-area shape: the lights circle's pool
+      - entity: switch.sala_triplo_0_left
+        hold: true                # the checkbox: counts as a holder
+        downstream: [light.sala_triplo_0_center]   # never counted / never switched off
+      - entity: light.led_strip_rgbw_2
+        hold: false
     circles:
       - type: climate
         behavior: focus
@@ -742,3 +748,7 @@ and compare against the two renders each phase.
 | 12 | 2026-11-19 | Registry-derived control pools skip `entity_category: config/diagnostic` and hidden/disabled entities — otherwise a room's Tuya config switches inflate the lights badge. |
 | 13 | 2026-11-19 | Phase 1 `focus` opens HA's own more-info dialog as the stand-in for the Phase 2 panel; the chevron is rendered but inert (`aria-disabled`). |
 | 14 | 2026-11-19 | FR-11 "expand" cannot land before FR-12/13 (the panel is Phase 2), so Phase 1 ships the affordance only. Recorded as a contract conflict. |
+| 15 | 2026-11-19 | Lights circle merges hierarchy-area's `hold` semantics: `controls[]` (entity, hold, downstream) on an area drives the pool; badge and `toggle_off` use the holder set only, and a downstream device is excluded from both. Auto mode uses D11's area-level rule. |
+| 16 | 2026-11-19 | Power at ~0 W is omitted from the tile (same "no signal, no line" rule as an unmapped area). |
+| 17 | 2026-11-19 | Development moved to the test instance: `HomeTest` dashboard (`home-test`) with mock covers/lights/climate/doors/windows. Live stays on the Phase 1 build until the test work is confirmed. |
+| 18 | 2026-11-19 | Debt: `focus` → more-info is a stand-in; decide focus vs toggle per circle before Phase 2 controls land. |

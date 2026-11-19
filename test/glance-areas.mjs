@@ -180,6 +180,15 @@ const html = (c) => c.shadowRoot.innerHTML;
   ok(!txt.includes("1,7kW"), "child meter inside the same area is not double counted");
 }
 
+{
+  const zero = { ...states, "sensor.sala_power": st("0.0") };
+  const c = new ctx.GlanceAreasCard();
+  c.setConfig({ floor: "first", areas: [{ area: "sala" }] });
+  c.hass = { ...hass, states: zero };
+  const sala = html(c).split('data-area="sala"')[1].split('class="tile"')[0];
+  ok(!sala.includes('class="r2"'), "a 0 W meter does not draw a power line");
+}
+
 // ---- circles --------------------------------------------------------------
 
 {
@@ -190,7 +199,8 @@ const html = (c) => c.shadowRoot.innerHTML;
   ok(txt.includes('data-circle="lights"'), "lights circle renders");
   ok(txt.includes('icon="mdi:fire"'), "climate icon follows hvac mode (heat)");
   const lights = txt.split('data-circle="lights"')[1].split("</button>")[0];
-  ok(lights.includes('<span class="badge">2</span>'), "lights badge counts on members only (config entity skipped)");
+  ok(lights.includes('<span class="badge">1</span>'),
+    "lights badge counts holders only: a lamp does not hold where a switch exists");
   ok(txt.includes('class="circ on"'), "active circle is tinted");
   const covers = txt.split('data-circle="covers"')[1].split("</button>")[0];
   ok(covers.includes("1 not closed"), "covers aria-label follows open shutters");
@@ -204,9 +214,12 @@ const html = (c) => c.shadowRoot.innerHTML;
 }
 
 {
-  const c = make({ floor: "first", areas: [{ area: "sala", circles: [{ type: "lights", exclude: ["light.sala_teto"] }] }] });
+  // Excluding the only switch must not promote the lamp to a holder: D11 is an
+  // area rule, not a "remaining pool" rule.
+  const c = make({ floor: "first", areas: [{ area: "sala", circles: [{ type: "lights", exclude: ["switch.sala_lampada"] }] }] });
   const lights = html(c).split('data-circle="lights"')[1].split("</button>")[0];
-  ok(lights.includes('<span class="badge">1</span>'), "circle exclude survives");
+  ok(!lights.includes('class="badge"'), "excluding the switch leaves no holder (lamp stays non-holding)");
+  ok(lights.includes("all off"), "aria-label reports no active holder");
 }
 
 {
@@ -221,27 +234,50 @@ const html = (c) => c.shadowRoot.innerHTML;
 // ---- lights toggle_off ----------------------------------------------------
 
 {
-  const onStates = { ...states, "light.cozinha": st("on") };
+  // Declared controls (hierarchy-area shape): hold decides membership, a
+  // downstream device is never counted and never switched off on its own.
   const c = new ctx.GlanceAreasCard();
   c.setConfig({
     floor: "first",
     areas: [{
       area: "sala",
-      circles: [{ type: "lights", behavior: "toggle_off", exclude: ["switch.sala_lampada"] }],
+      circles: [{ type: "lights", behavior: "toggle_off" }],
+      controls: [
+        { entity: "switch.sala_lampada", hold: true, downstream: ["light.sala_teto"] },
+        { entity: "switch.sala_config", hold: false },
+        { entity: "light.sala_teto" },
+      ],
     }],
   });
-  c.hass = { ...hass, states: onStates };
+  c.hass = hass;
   calls.length = 0;
   const entry = c._resolvedAreas()[0];
   const model = c._areaModel(entry);
   const lights = model.circles.find((x) => x.type === "lights");
-  c._turnOff(lights.members);
+  ok(!lights.members.includes("light.sala_teto"), "downstream device is excluded from the lights pool");
+  ok(!lights.active.includes("switch.sala_config"), "a hold:false switch is not an active holder");
+  ok(lights.count === 1, "badge counts only held switches");
+  c._turnOff(lights.active);
   const ids = calls.flatMap((x) => x.ids);
-  ok(ids.length === 1 && ids[0] === "light.sala_teto",
-    "turn_off targets exactly the included, on members, once");
-  ok(!ids.includes("switch.sala_lampada"), "excluded member is never turned off");
-  ok(lights.count === 1, "badge count follows the same exclusion");
+  ok(ids.length === 1 && ids[0] === "switch.sala_lampada",
+    "turn_off targets exactly the held switch, once");
+  ok(!ids.includes("light.sala_teto"), "downstream device is never turned off");
   ok(calls.every((x) => x.service === "turn_off"), "service is turn_off");
+}
+
+{
+  // Switch-less area: the lamp is the holder, so it is the toggle_off target.
+  const onStates = { ...states, "light.cozinha": st("on") };
+  const c = new ctx.GlanceAreasCard();
+  c.setConfig({ floor: "first", areas: [{ area: "cozinha", circles: [{ type: "lights", behavior: "toggle_off" }] }] });
+  c.hass = { ...hass, states: onStates };
+  calls.length = 0;
+  const model = c._areaModel(c._resolvedAreas()[0]);
+  const lights = model.circles.find((x) => x.type === "lights");
+  ok(lights.count === 1, "lamp holds in a switch-less area");
+  c._turnOff(lights.active);
+  const ids = calls.flatMap((x) => x.ids);
+  ok(ids.length === 1 && ids[0] === "light.cozinha", "switch-less lamp is switched off");
 }
 
 // ---- openings -------------------------------------------------------------
