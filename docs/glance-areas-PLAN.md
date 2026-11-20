@@ -636,6 +636,12 @@ height animation, timer, keyboard, focus return.
 - **Exit:** expanding any tile at 9 areas leaves 8 legible mini-tiles with no
   overlap or clipping; timer matrix green; `Esc` returns focus; no scroll jump.
 
+**Status 2026-11-20: built on the test instance.** The panel spans as many 96 px
+mini rows as its content needs (3–10, measured), siblings reflow around it with
+`grid-auto-flow: dense`, `Esc` collapses and returns focus, and the timer
+matrix is unit-tested (pause/resume keeps the remaining time). Phase 3 replaces
+the placeholder panel body.
+
 ### Phase 3 — Panel contents (3–4 days)
 
 FR-15 … FR-19, FR-22 detail sections of the editor.
@@ -752,3 +758,6 @@ and compare against the two renders each phase.
 | 16 | 2026-11-19 | Power at ~0 W is omitted from the tile (same "no signal, no line" rule as an unmapped area). |
 | 17 | 2026-11-19 | Development moved to the test instance: `HomeTest` dashboard (`home-test`) with mock covers/lights/climate/doors/windows. Live stays on the Phase 1 build until the test work is confirmed. |
 | 18 | 2026-11-19 | Debt: `focus` → more-info is a stand-in; decide focus vs toggle per circle before Phase 2 controls land. |
+| 19 | 2026-11-20 | Tile chrome tightened per review: padding 12, gap 10, name 20 px, readout 14 px, power 13 px, circle icon 23 px, thinner ring. Door/window are 34 px round nubs parked in the bottom corners with the same floating count badge; the chevron lost its outline and sits on the bottom rail. |
+| 20 | 2026-11-20 | Phase 2 built: one open panel at a time, siblings become 96 px mini-tiles with `grid-auto-flow: dense`, panel spans 3–10 measured 96 px rows, `Esc` collapses and returns focus. `focus` on a circle now opens the panel (more-info debt resolved). |
+| 21 | 2026-11-20 | Timer pauses keep the **remaining** time (focus/hidden tab); a full reset happens only on interaction. Tab-visibility and card-rebuild `focusout` no longer restart the countdown. |

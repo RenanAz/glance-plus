@@ -87,6 +87,9 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 23 | 2026-11-19 | A power meter at ~0 W draws no line (rounded to 0 W). |
 | 24 | 2026-11-19 | **Debt:** `focus` → more-info is a Phase 1 stand-in. Decide "focus/expand" vs "toggle" per circle before Phase 2 ships controls. |
 | 25 | 2026-11-19 | Development moved to the **test instance** (192.168.70.103): dashboard `home-test` (HomeTest, views Home/Lab/Wide) with mock covers, lights, climate, doors/windows and temp/humidity. |
+| 26 | 2026-11-20 | Visual pass: tighter tile padding, smaller name/readout/power, bigger circle icons, door/window as round corner nubs with floating badges, borderless chevron on the bottom rail. |
+| 27 | 2026-11-20 | Phase 2: open panel is one column, spans measured content height in 96 px rows; siblings are mini-tiles with door/window/lights bubbles; retarget and `Esc` keep exactly one open. |
+| 28 | 2026-11-20 | Timer pauses preserve the remaining time; only a real interaction resets it. `focus` on a circle opens the panel (the more-info stand-in is gone). |
 
 ## 7. Open questions
 

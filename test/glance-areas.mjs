@@ -6,24 +6,38 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const calls = [];
+const timerQueue = [];
+const fakeSetTimeout = (fn, ms) => { timerQueue.push({ fn, ms, cleared: false }); return timerQueue.length; };
+const fakeClearTimeout = (id) => { if (id && timerQueue[id - 1]) timerQueue[id - 1].cleared = true; };
 class HTMLElement {
   constructor() {
     this.style = {};
-    this.shadowRoot = { innerHTML: "", addEventListener() {}, querySelectorAll: () => [] };
+    this.shadowRoot = {
+      innerHTML: "", addEventListener() {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      contains: () => false,
+    };
   }
   attachShadow() {
     return this.shadowRoot;
   }
 }
+const doc = {
+  createElement: () => ({ append() {}, addEventListener() {} }),
+  visibilityState: "visible",
+  addEventListener() {},
+  removeEventListener() {},
+};
 const ctx = {
   HTMLElement,
   customElements: { get: () => true, define() {} },
   window: {},
-  document: { createElement: () => ({ append() {}, addEventListener() {} }) },
+  document: doc,
   console: { ...console, info() {} },
   CustomEvent: class { constructor(t, o) { Object.assign(this, o); this.type = t; } },
-  setTimeout,
-  clearTimeout,
+  setTimeout: fakeSetTimeout,
+  clearTimeout: fakeClearTimeout,
   Date,
   Intl,
 };
@@ -285,8 +299,8 @@ const html = (c) => c.shadowRoot.innerHTML;
 {
   const c = make({ floor: "first", areas: [{ area: "sala" }] });
   const txt = html(c);
-  ok(txt.includes('data-pill="doors"') && txt.includes('<span class="pcount">1</span>'),
-    "open door increments the door pill");
+  ok(txt.includes('data-pill="doors"') && txt.includes('<span class="badge">1</span>'),
+    "open door increments the door nub badge");
   ok(!txt.includes('data-pill="windows"'), "closed window hides its pill at 0");
   ok(txt.includes('class="chev"'), "chevron always renders");
 }
@@ -345,6 +359,94 @@ const html = (c) => c.shadowRoot.innerHTML;
   c.setConfig({ floor: "first", areas: [{ area: "sala" }] });
   c.hass = { ...hass, states: fStates, locale: { language: "en-US" } };
   ok(html(c).includes("<span>72°</span>"), "°F reading renders without a unit letter in the tile");
+}
+
+// ---- Phase 2: expansion, timer, mini-tiles --------------------------------
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }, { area: "corredor" }], expand: { timeout: 20 } });
+  const before = timerQueue.length;
+  c._expand("sala");
+  ok(c._open === "sala", "expand records the open area");
+  const t = timerQueue[timerQueue.length - 1];
+  ok(timerQueue.length === before + 1 && t.ms === 20000 && !t.cleared, "timer armed at 20 s");
+
+  c._bumpTimer();
+  ok(t.cleared, "interaction clears the pending timer");
+  const t2 = timerQueue[timerQueue.length - 1];
+  ok(t2 !== t && t2.ms === 20000, "interaction re-arms a fresh timer");
+
+  t2.fn();
+  ok(c._open === null, "timer collapses the panel");
+
+  c._expand("sala");
+  const t3 = timerQueue[timerQueue.length - 1];
+  c._expand("corredor");
+  ok(c._open === "corredor", "retarget keeps exactly one expanded area");
+  ok(t3.cleared, "retarget clears the previous timer");
+
+  c._collapse(false);
+  ok(c._open === null, "collapse clears the open area");
+  ok(timerQueue[timerQueue.length - 1].cleared, "collapse disarms the timer");
+}
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }], expand: { timeout: 0 } });
+  const before = timerQueue.length;
+  c._expand("sala");
+  ok(timerQueue.length === before, "timeout 0 never arms a timer");
+  c._collapse(false);
+}
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }], expand: { timeout: 20, pause_on_focus: true } });
+  c._expand("sala");
+  const t = timerQueue[timerQueue.length - 1];
+  c._focusPause(true);
+  ok(t.cleared && c._paused, "focus inside the panel pauses the timer");
+  const after = timerQueue.length;
+  c._focusPause(false);
+  ok(!c._paused && timerQueue.length === after + 1, "focus leaving re-arms it");
+  c._collapse(false);
+}
+
+{
+  doc.visibilityState = "hidden";
+  const c = make({ floor: "first", areas: [{ area: "sala" }], expand: { timeout: 20 } });
+  const before = timerQueue.length;
+  c._expand("sala");
+  ok(timerQueue.length === before, "hidden tab does not arm the timer");
+  c._visibility();
+  doc.visibilityState = "visible";
+  c._visibility();
+  ok(timerQueue.length === before + 1, "becoming visible re-arms it");
+  c._collapse(false);
+}
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }] });
+  const entry = c._resolvedAreas()[0];
+  const m = c._areaModel(entry);
+  const icons = m.bubbles.map((b) => b.icon).sort();
+  ok(icons.includes("mdi:door") && icons.includes("mdi:ceiling-light"),
+    "mini bubbles carry doors and lights counts");
+  const txt = html(c);
+  ok(txt.includes('class="mini-body"'), "mini body is rendered for the morph");
+  ok(txt.includes("mini-id") && txt.includes("bubbles"), "mini-tile has identity + bubbles");
+  ok(txt.includes("pbody") && txt.includes("Openings"), "panel body placeholder is rendered");
+  ok(txt.includes("Spots, groups and bundles"), "phase 3 note is present");
+  ok(txt.includes('aria-expanded="false"'), "collapsed tiles are marked collapsed");
+}
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }] });
+  c._open = "sala";
+  c._sig = "";
+  c._render();
+  const txt = html(c);
+  ok(txt.includes('class="tile open"'), "open tile renders the expanded class");
+  ok(txt.includes("--span:3") && txt.includes("height:800px"), "open tile carries its row span and height");
+  c._open = null;
 }
 
 console.log("\nall glance-areas checks passed");

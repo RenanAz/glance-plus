@@ -211,6 +211,7 @@ function gaConfig(config) {
   const mode = c.areas_mode === "explicit" || c.areas_mode === "auto"
     ? c.areas_mode
     : areas.length ? "explicit" : "auto";
+  const ex = c.expand && typeof c.expand === "object" ? c.expand : {};
   return {
     type: "custom:glance-areas",
     title: GA_STR(c.title) || null,
@@ -219,8 +220,14 @@ function gaConfig(config) {
     columns: GA_INT(c.columns, GA_COLS, 1, 6),
     tile_height: GA_INT(c.tile_height, GA_TILE_H, 160, 420),
     areas_mode: mode,
-    // Parsed but owned by Phase 2; kept so a config survives the upgrade.
-    expand: c.expand && typeof c.expand === "object" ? c.expand : {},
+    expand: {
+      timeout: GA_INT(ex.timeout, 20, 0, 3600),
+      width: ex.width === "full" ? "full" : "column",
+      pause_on_focus: ex.pause_on_focus !== false,
+      pause_on_bundle: ex.pause_on_bundle !== false,
+      countdown: ex.countdown === true,
+      span: GA_INT(ex.span, 3, 2, 4),
+    },
     areas,
   };
 }
@@ -280,7 +287,28 @@ class GlanceAreasCard extends HTMLElement {
     this._sig = "";
     this._regError = null;
     this._prefsError = null;
+    this._open = null;
+    this._timer = null;
+    this._morphT = null;
+    this._paused = false;
+    this._visPaused = false;
+    this._remaining = null;
+    this._deadline = 0;
+    this._onVis = () => this._visibility();
     this.shadowRoot.addEventListener("click", (ev) => this._click(ev));
+    this.shadowRoot.addEventListener("keydown", (ev) => this._key(ev));
+    this.shadowRoot.addEventListener("focusin", (ev) => {
+      // Only real panel controls pause the timer; focusing the chevron on a
+      // click must not freeze it.
+      if (ev.target.closest && ev.target.closest(".pbody")) this._focusPause(true);
+    });
+    this.shadowRoot.addEventListener("focusout", (ev) => {
+      if (ev.relatedTarget && this.shadowRoot.contains(ev.relatedTarget)) return;
+      this._focusPause(false);
+    });
+    this.shadowRoot.addEventListener("pointerdown", () => this._bumpTimer());
+    this.shadowRoot.addEventListener("input", () => this._bumpTimer());
+    this.shadowRoot.addEventListener("change", () => this._bumpTimer());
   }
 
   static getConfigElement() {
@@ -299,8 +327,21 @@ class GlanceAreasCard extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
     this._cfg = gaConfig(config);
+    // Keep an expanded tile only while it still exists in the new config.
+    if (this._open && this._cfg.areas_mode === "explicit" &&
+        !this._cfg.areas.some((a) => a.area === this._open)) this._open = null;
     this._sig = "";
     this._render();
+  }
+
+  connectedCallback() {
+    document.addEventListener("visibilitychange", this._onVis);
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener("visibilitychange", this._onVis);
+    this._stopTimer();
+    if (this._morphT) clearTimeout(this._morphT);
   }
 
   set hass(hass) {
@@ -498,6 +539,14 @@ class GlanceAreasCard extends HTMLElement {
     }
 
     const openings = this._openings(entry, bucket, h);
+    const doorCount = openings.doors.filter((o) => o.open).length;
+    const winCount = openings.windows.filter((o) => o.open).length;
+    const lightsCircle = circles.find((c) => c.type === "lights");
+    const bubbles = [
+      doorCount > 0 ? { icon: "mdi:door", n: doorCount } : null,
+      winCount > 0 ? { icon: "mdi:window-closed-variant", n: winCount } : null,
+      lightsCircle && lightsCircle.count > 0 ? { icon: "mdi:ceiling-light", n: lightsCircle.count } : null,
+    ].filter(Boolean).slice(0, 3);
 
     return {
       id: entry.area,
@@ -509,9 +558,12 @@ class GlanceAreasCard extends HTMLElement {
       watts,
       power: gaPower(watts, this._lang()),
       circles,
-      doors: openings.doors,
-      windows: openings.windows,
-      open: false,
+      doors: doorCount,
+      windows: winCount,
+      doorList: openings.doors,
+      windowList: openings.windows,
+      bubbles,
+      open: this._open === entry.area,
     };
   }
 
@@ -607,17 +659,24 @@ class GlanceAreasCard extends HTMLElement {
   }
 
   _openings(entry, bucket, hass) {
-    const doors = new Set(entry.openings.doors);
-    const windows = new Set(entry.openings.windows);
+    const doors = new Map(entry.openings.doors.map((id) => [id, id]));
+    const windows = new Map(entry.openings.windows.map((id) => [id, id]));
     for (const id of bucket.all || []) {
       if (!id.startsWith("binary_sensor.")) continue;
       const st = hass.states[id];
       const dc = st && st.attributes && st.attributes.device_class;
-      if (dc === "door" || dc === "garage_door") doors.add(id);
-      else if (dc === "window" || dc === "opening") windows.add(id);
+      if (dc === "door" || dc === "garage_door") doors.set(id, id);
+      else if (dc === "window" || dc === "opening") windows.set(id, id);
     }
-    const count = (ids) => [...ids].filter((id) => hass.states[id] && hass.states[id].state === "on").length;
-    return { doors: count(doors), windows: count(windows) };
+    const list = (map) => [...map.keys()].map((id) => {
+      const st = hass.states[id];
+      return {
+        id,
+        name: (st && st.attributes && st.attributes.friendly_name) || id.split(".")[1],
+        open: !!st && st.state === "on",
+      };
+    });
+    return { doors: list(doors), windows: list(windows) };
   }
 
   _lang() {
@@ -662,7 +721,8 @@ class GlanceAreasCard extends HTMLElement {
       body = '<div class="empty"><ha-icon icon="mdi:home-search-outline"></ha-icon><span>' +
         GA_ESC(msg) + "</span></div>";
     } else {
-      body = '<div class="grid" role="list">' + model.map((a) => this._tile(a)).join("") + "</div>";
+      body = '<div class="grid' + (this._open ? " open" : "") + '" role="list">' +
+        model.map((a) => this._tile(a)).join("") + "</div>";
     }
 
     const hints = [];
@@ -676,6 +736,8 @@ class GlanceAreasCard extends HTMLElement {
       "<style>" + this._css() + "</style>" +
       '<div class="card" style="--cols:' + cfg.columns + ";--th:" + cfg.tile_height + 'px">' +
       head + body + warn + "</div>";
+    // The open panel is measured after it exists, so a rebuild keeps its size.
+    this._sizeOpen();
   }
 
   _tile(a) {
@@ -689,27 +751,63 @@ class GlanceAreasCard extends HTMLElement {
       : "";
 
     const circles = a.circles.length
-      ? '<div class="circles">' + a.circles.map((c) => this._circle(a, c)).join("") + "</div>"
+      ? '<div class="circles' + (a.circles.length === 3 ? " three" : "") + '">' +
+        a.circles.map((c) => this._circle(a, c)).join("") + "</div>"
       : "";
 
-    const doorPill = a.doors > 0 ? this._pill(a, "doors", a.doors) : "";
-    const winPill = a.windows > 0 ? this._pill(a, "windows", a.windows) : "";
+    const doorNub = a.doors > 0 ? this._nub("doors", a.doors, "left") : "";
+    const winNub = a.windows > 0 ? this._nub("windows", a.windows, "right") : "";
+
+    const bubbles = a.bubbles.length
+      ? '<div class="bubbles">' + a.bubbles.map((b) =>
+          '<span class="bubble"><ha-icon icon="' + GA_ESC(b.icon) + '"></ha-icon><b>' + b.n + "</b></span>"
+        ).join("") + "</div>"
+      : '<div class="bubbles"></div>';
+
+    const mini =
+      '<div class="mini-body" data-toggle>' + bubbles +
+        '<div class="mini-id"><ha-icon class="aicon" icon="' + GA_ESC(a.icon) + '"></ha-icon>' +
+        '<span class="mname">' + name + "</span></div>" +
+      "</div>";
+
+    const cls = "tile" + (a.open ? " open" : "");
+    const span = this._cfg.expand.span;
+    const th = this._cfg.tile_height;
+    const style = "style=\"--ac:" + GA_ESC(a.accent) +
+      (a.open ? ";--span:" + span + ";height:" + (th * span + 10 * (span - 1)) + "px" : "") + '"';
 
     return (
-      '<div class="tile" role="listitem" data-area="' + GA_ESC(a.id) + '" style="--ac:' + GA_ESC(a.accent) + '">' +
-        '<div class="top">' +
+      '<div class="' + cls + '" role="listitem" tabindex="0" data-area="' + GA_ESC(a.id) + '" ' + style +
+        ' aria-expanded="' + (a.open ? "true" : "false") + '">' +
+        '<div class="top" data-toggle>' +
           '<ha-icon class="aicon" icon="' + GA_ESC(a.icon) + '"></ha-icon>' +
           '<div class="readout">' + line1 + line2 + "</div>" +
         "</div>" +
-        '<div class="name" title="' + name + '">' + name + "</div>" +
+        '<div class="name" data-toggle title="' + name + '">' + name + "</div>" +
         circles +
-        '<div class="pills">' +
-          '<span class="pslot">' + doorPill + "</span>" +
-          '<button class="chev" type="button" aria-disabled="true" ' +
-            'aria-label="Detail panel for ' + name + " (phase 2)\" title=\"Detail panel — phase 2\">" +
-            '<ha-icon icon="mdi:chevron-down"></ha-icon></button>' +
-          '<span class="pslot end">' + winPill + "</span>" +
-        "</div>" +
+        doorNub +
+        '<button class="chev" type="button" data-toggle aria-expanded="' + (a.open ? "true" : "false") +
+          '" aria-label="' + (a.open ? "Collapse " : "Expand ") + name + '">' +
+          '<ha-icon icon="mdi:chevron-down"></ha-icon></button>' +
+        winNub +
+        mini +
+        this._panel(a) +
+      "</div>"
+    );
+  }
+
+  // Phase 2 shell: the real detail stack (spots, groups, bundles) is Phase 3.
+  _panel(a) {
+    const opening = (o) =>
+      '<div class="prow"><span class="pdot' + (o.open ? " on" : "") + '"></span>' +
+      '<span class="pname">' + GA_ESC(o.name) + "</span>" +
+      '<span class="pstate">' + (o.open ? "open" : "closed") + "</span></div>";
+    const all = [...a.doorList, ...a.windowList];
+    return (
+      '<div class="pbody">' +
+        '<div class="psec">Openings</div>' +
+        (all.length ? all.map(opening).join("") : '<div class="pnone">No doors or windows.</div>') +
+        '<div class="pnote">Spots, groups and bundles arrive in phase 3.</div>' +
       "</div>"
     );
   }
@@ -733,22 +831,224 @@ class GlanceAreasCard extends HTMLElement {
     );
   }
 
-  _pill(area, type, count) {
+  _nub(type, count, side) {
     const door = type === "doors";
+    const label = (door ? "Doors: " : "Windows: ") + count + " open";
     return (
-      '<span class="pill" data-pill="' + type + '" aria-label="' +
-      (door ? "Doors" : "Windows") + ": " + count + '">' +
+      '<span class="nub ' + side + '" data-pill="' + type + '" role="img" aria-label="' +
+      GA_ESC(label) + '" title="' + GA_ESC(label) + '">' +
       '<ha-icon icon="' + (door ? "mdi:door" : "mdi:window-closed-variant") + '"></ha-icon>' +
-      '<span class="pcount">' + count + "</span>" +
+      '<span class="badge">' + count + "</span>" +
       "</span>"
     );
+  }
+
+  // ---- expansion (FR-12 … FR-14) ------------------------------------------
+
+  _toggle(id) {
+    if (!id) return;
+    if (this._open === id) this._collapse(true);
+    else this._expand(id);
+  }
+
+  _expand(id) {
+    if (!this._cfg || !id || this._open === id) return;
+    const was = this._open;
+    this._open = id;
+    this._applyExpansion(was ? "retarget" : "expand");
+    this._startTimer();
+  }
+
+  _collapse(focus) {
+    const id = this._open;
+    if (!id) return;
+    this._open = null;
+    this._visPaused = false;
+    this._paused = false;
+    this._remaining = null;
+    this._stopTimer();
+    this._applyExpansion("collapse");
+    if (focus) this._focusTile(id);
+  }
+
+  // Class/style flips only: the card's DOM is never rebuilt for a morph.
+  _applyExpansion(mode) {
+    const grid = this.shadowRoot.querySelector(".grid");
+    if (!grid) return;
+    const th = this._cfg.tile_height;
+    if (this._morphT) {
+      clearTimeout(this._morphT);
+      this._morphT = null;
+    }
+    grid.classList.toggle("open", !!this._open);
+    for (const t of grid.querySelectorAll(".tile")) {
+      const isOpen = t.dataset.area === this._open;
+      const wasOpen = t.classList.contains("open");
+      t.classList.toggle("mini", !!this._open && !isOpen);
+      t.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      const chev = t.querySelector(".chev");
+      if (chev) {
+        chev.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        const nm = t.querySelector(".name");
+        chev.setAttribute("aria-label", (isOpen ? "Collapse " : "Expand ") + (nm ? nm.textContent : "area"));
+      }
+      if (isOpen) {
+        if (!wasOpen) {
+          t.style.height = th + "px";
+          void t.offsetHeight; // force a start value so the height animates
+        }
+        t.classList.add("open");
+        this._sizeOpen(t);
+      } else if (wasOpen) {
+        if (mode === "collapse") {
+          // Hold the row span until the shrink finishes, or the tile would
+          // overlap the rows below for 220 ms.
+          t.classList.add("leaving");
+          t.style.height = th + "px";
+          this._morphT = setTimeout(() => {
+            if (this._open !== t.dataset.area) {
+              t.classList.remove("open", "leaving");
+              t.style.height = "";
+            }
+            this._morphT = null;
+            const g = this.shadowRoot.querySelector(".grid");
+            if (g) g.classList.toggle("open", !!this._open || !!g.querySelector(".leaving"));
+          }, 240);
+        } else {
+          t.classList.remove("open", "leaving");
+          t.style.height = "";
+        }
+      } else {
+        t.style.height = "";
+        t.classList.remove("leaving");
+      }
+    }
+  }
+
+  // The open panel spans as many 96 px mini rows as its content needs (clamped
+  // 3..10), so the panel tracks the detail stack instead of a fixed 3 rows.
+  _sizeOpen(tile) {
+    const t = tile || this.shadowRoot.querySelector(".tile.open");
+    if (!t) return;
+    const MINI = 96;
+    const GAP = 10;
+    const pb = t.querySelector(".pbody");
+    const need = (pb ? pb.offsetTop + pb.scrollHeight : 118) + 8;
+    const span = Math.max(3, Math.min(10, Math.ceil((need + GAP) / (MINI + GAP))));
+    t.style.setProperty("--span", String(span));
+    t.style.height = span * MINI + (span - 1) * GAP + "px";
+  }
+
+  _focusTile(id) {
+    const el = this.shadowRoot.querySelector('.tile[data-area="' + String(id).replace(/"/g, '\\"') + '"]');
+    if (el && el.focus) el.focus();
+  }
+
+  // ---- auto-collapse (FR-14) ----------------------------------------------
+
+  // Full reset: used on expand and on any interaction inside the card.
+  _startTimer() {
+    this._remaining = null;
+    this._stopTimer();
+    if (!this._open || !this._cfg) return;
+    if (!this._cfg.expand.timeout || this._paused) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this._visPaused = true;
+      return;
+    }
+    this._resume();
+  }
+
+  // Resume from a pause with the time that was left, so a hidden tab or a
+  // focused control does not restart the whole countdown.
+  _resume() {
+    if (!this._open || !this._cfg || this._paused) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this._visPaused = true;
+      return;
+    }
+    const secs = this._cfg.expand.timeout;
+    if (!secs) return;
+    const ms = this._remaining != null ? this._remaining : secs * 1000;
+    this._remaining = null;
+    this._visPaused = false;
+    this._stopTimer();
+    this._deadline = Date.now() + ms;
+    this._timer = setTimeout(() => this._collapse(true), ms);
+  }
+
+  _pause() {
+    if (!this._timer) return;
+    this._remaining = Math.max(1000, this._deadline - Date.now());
+    this._stopTimer();
+  }
+
+  _stopTimer() {
+    if (this._timer) clearTimeout(this._timer);
+    this._timer = null;
+  }
+
+  _bumpTimer() {
+    if (this._open) this._startTimer();
+  }
+
+  _focusPause(inside) {
+    if (!this._open || !this._cfg.expand.pause_on_focus) return;
+    if (inside) {
+      this._paused = true;
+      this._pause();
+      return;
+    }
+    // Only resume if a pause was actually in effect: a card rebuild also fires
+    // focusout, and re-arming there would keep the panel open forever.
+    if (!this._paused) return;
+    this._paused = false;
+    this._resume();
+  }
+
+  _visibility() {
+    if (!this._open) return;
+    if (document.visibilityState === "hidden") {
+      this._visPaused = true;
+      this._pause();
+    } else if (this._visPaused) {
+      this._visPaused = false;
+      this._resume();
+    }
+  }
+
+  _key(ev) {
+    const tile = ev.target.closest ? ev.target.closest(".tile") : null;
+    if (!tile) return;
+    if (ev.key === "Escape") {
+      if (this._open) {
+        ev.preventDefault();
+        this._collapse(true);
+      }
+      return;
+    }
+    if (ev.target !== tile) return; // inner buttons keep their own keys
+    if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
+      ev.preventDefault();
+      this._toggle(tile.dataset.area);
+    }
   }
 
   // ---- interaction --------------------------------------------------------
 
   _click(ev) {
     const btn = ev.target.closest ? ev.target.closest("[data-circle]") : null;
-    if (!btn) return;
+    if (btn) {
+      this._circleClick(btn);
+      return;
+    }
+    const toggle = ev.target.closest ? ev.target.closest("[data-toggle]") : null;
+    if (!toggle) return;
+    const tile = toggle.closest(".tile");
+    if (tile) this._toggle(tile.dataset.area);
+  }
+
+  _circleClick(btn) {
     const type = btn.dataset.circle;
     const areaId = btn.dataset.area;
     const entry = (this._cfg.areas || []).find((a) => a.area === areaId) ||
@@ -762,16 +1062,9 @@ class GlanceAreasCard extends HTMLElement {
 
     if (circle.behavior === "none") return;
     if (circle.behavior === "focus") {
-      // Phase 1 stand-in for the detail panel (Phase 2): HA's own dialog.
-      const target = cm.first;
-      if (!target) return;
-      this.dispatchEvent(
-        new CustomEvent("hass-more-info", {
-          detail: { entityId: target },
-          bubbles: true,
-          composed: true,
-        })
-      );
+      // No groups yet (Phase 3), so focus == open the area's panel.
+      if (this._open === areaId) this._bumpTimer();
+      else this._expand(areaId);
       return;
     }
     if (circle.behavior === "toggle_off") this._turnOff(cm.active);
@@ -810,54 +1103,69 @@ class GlanceAreasCard extends HTMLElement {
       .grid {
         display: grid;
         grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
-        gap: 12px;
+        grid-auto-rows: var(--th, 260px);
+        grid-auto-flow: dense;
+        gap: 10px;
       }
+      /* While a panel is open, rows are mini-tile height so the siblings pack
+         tightly beside it. The panel spans however many rows it needs. */
+      .grid.open { grid-auto-rows: 96px; }
 
       .tile {
         position: relative; display: flex; flex-direction: column;
         height: var(--th, 260px); min-width: 0;
-        padding: 16px; border-radius: 20px;
+        padding: 12px 12px 8px; border-radius: 20px;
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid color-mix(in srgb, var(--primary-text-color) 8%, transparent);
         color: var(--primary-text-color);
         overflow: hidden;
+        transition: height .22s cubic-bezier(.2, .8, .2, 1), padding .22s ease,
+                    background .12s ease, border-color .12s ease;
       }
-      .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-height: 42px; }
+      .tile:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      .tile.open, .tile.leaving { grid-row: span var(--span, 3); }
+      .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; min-height: 34px; }
       .aicon {
-        --mdc-icon-size: 34px; color: var(--primary-text-color); opacity: .92; flex: none;
+        --mdc-icon-size: 32px; color: var(--primary-text-color); opacity: .92; flex: none;
       }
       .readout {
-        display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
         min-width: 0; text-align: right;
       }
       .r1 {
-        font-size: 16px; line-height: 1.15; font-variant-numeric: tabular-nums;
+        font-size: 14px; line-height: 1.15; font-variant-numeric: tabular-nums;
         color: var(--primary-text-color); white-space: nowrap;
       }
-      .r1 .dot { font-style: normal; opacity: .55; margin: 0 4px; }
+      .r1 .dot { font-style: normal; opacity: .55; margin: 0 3px; }
       .r2 {
         display: inline-flex; align-items: center; gap: 2px;
-        font-size: 15px; line-height: 1.1; font-variant-numeric: tabular-nums;
+        font-size: 13px; line-height: 1.1; font-variant-numeric: tabular-nums;
         color: var(--secondary-text-color); white-space: nowrap;
       }
-      .r2 ha-icon { --mdc-icon-size: 15px; opacity: .8; }
+      .r2 ha-icon { --mdc-icon-size: 13px; opacity: .8; }
 
       .name {
-        margin-top: 8px; font-size: 22px; font-weight: 600; line-height: 1.15;
+        margin-top: 4px; font-size: 20px; font-weight: 600; line-height: 1.15;
         letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
 
-      .circles { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 12px; }
+      /* The circle row sits above a 40 px rail reserved for the corner nubs and
+         the chevron, so the three do not collide at the bottom. */
+      .circles {
+        display: flex; align-items: center; gap: 8px;
+        margin-top: auto; padding: 10px 0 40px;
+      }
+      .circles.three .circ { max-width: calc((100% - 16px) / 3); }
       .circ {
-        position: relative; flex: none; width: 44px; height: 44px; padding: 0;
+        position: relative; flex: none; width: 44px; aspect-ratio: 1; padding: 0;
         display: inline-flex; align-items: center; justify-content: center;
         border-radius: 50%; cursor: pointer;
         color: var(--secondary-text-color);
         background: transparent;
-        border: 1px solid color-mix(in srgb, var(--primary-text-color) 16%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
         transition: background .12s ease, border-color .12s ease, color .12s ease;
       }
-      .circ ha-icon { --mdc-icon-size: 20px; }
+      .circ ha-icon { --mdc-icon-size: 23px; }
       .circ.on {
         color: var(--primary-text-color);
         background: color-mix(in srgb, var(--ac, #818cf8) 22%, transparent);
@@ -867,42 +1175,103 @@ class GlanceAreasCard extends HTMLElement {
       .circ:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
       .badge {
         position: absolute; top: -4px; right: -4px;
-        min-width: 18px; height: 18px; padding: 0 4px;
+        min-width: 17px; height: 17px; padding: 0 4px;
         display: inline-flex; align-items: center; justify-content: center;
-        font-size: 12px; font-weight: 600; line-height: 1;
+        font-size: 11px; font-weight: 600; line-height: 1;
         color: ${GA_BADGE};
         background: var(--card-background-color, #11141a);
         border: 1px solid color-mix(in srgb, ${GA_BADGE} 45%, transparent);
         border-radius: 999px;
       }
 
-      .pills {
-        display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-        gap: 8px; margin-top: 16px; min-height: 30px;
-      }
-      .pslot { display: flex; min-width: 0; }
-      .pslot.end { justify-content: flex-end; }
-      .pill {
-        display: inline-flex; align-items: center; gap: 4px;
-        height: 30px; padding: 0 10px; border-radius: 15px;
-        font-size: 13px; font-variant-numeric: tabular-nums;
-        color: var(--secondary-text-color);
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
-      }
-      .pill ha-icon { --mdc-icon-size: 16px; }
-      .pill .pcount { color: ${GA_BADGE}; font-weight: 600; }
-
-      .chev {
-        flex: none; width: 30px; height: 30px; padding: 0;
+      /* Bottom rail: door bottom-left, window bottom-right, chevron centred. */
+      .nub {
+        position: absolute; bottom: 8px; width: 34px; height: 34px;
         display: inline-flex; align-items: center; justify-content: center;
         border-radius: 50%; color: var(--secondary-text-color);
-        background: rgba(255, 255, 255, 0.06);
+        background: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
         border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+      }
+      .nub.left { left: 12px; }
+      .nub.right { right: 12px; }
+      .nub ha-icon { --mdc-icon-size: 17px; }
+      .nub .badge { top: -5px; right: -5px; }
+
+      .chev {
+        position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
+        width: 30px; height: 30px; padding: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: var(--secondary-text-color); background: none; border: 0;
         cursor: default;
       }
-      .chev ha-icon { --mdc-icon-size: 18px; display: flex; }
-      .chev:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      .chev ha-icon { --mdc-icon-size: 22px; display: flex; }
+      .chev:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; border-radius: 50%; }
+
+      /* ---- mini-tile (FR-21) ------------------------------------------- */
+      .mini-body { display: none; height: 100%; min-width: 0; }
+      .tile.mini { height: 96px !important; padding: 10px 12px; border-radius: 18px; }
+      .tile.mini > .top,
+      .tile.mini > .name,
+      .tile.mini > .circles,
+      .tile.mini > .nub,
+      .tile.mini > .chev,
+      .tile.mini > .pbody { display: none; }
+      .tile.mini .mini-body {
+        display: flex; flex-direction: column; justify-content: space-between; gap: 6px;
+      }
+      .bubbles { display: flex; gap: 6px; min-height: 22px; }
+      .bubble {
+        display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px;
+        border-radius: 11px; font-size: 11px; font-variant-numeric: tabular-nums;
+        color: var(--secondary-text-color);
+        background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+      }
+      .bubble ha-icon { --mdc-icon-size: 13px; }
+      .bubble b { color: ${GA_BADGE}; font-weight: 600; }
+      .mini-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
+      .mini-id .aicon { --mdc-icon-size: 22px; }
+      .mname {
+        font-size: 16px; font-weight: 600; line-height: 1.15;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+
+      /* ---- expanded panel shell (FR-12/13) ------------------------------ */
+      .tile.open .circles, .tile.open .nub { display: none; }
+      .tile.open .chev {
+        top: auto; bottom: 6px; cursor: pointer;
+        transform: translateX(-50%) rotate(180deg);
+      }
+      .pbody {
+        display: none; margin-top: 14px; padding-top: 10px;
+        border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 9%, transparent);
+        overflow: auto;
+      }
+      .tile.open .pbody { display: block; padding-bottom: 34px; animation: ga-fade .18s ease; }
+      .psec {
+        font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--secondary-text-color); opacity: .8; margin-bottom: 6px;
+      }
+      .prow {
+        display: flex; align-items: center; gap: 8px; min-height: 30px;
+        padding: 2px 8px; border-radius: 8px;
+        font-size: 13px; color: var(--primary-text-color);
+        background: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
+        margin-bottom: 4px;
+      }
+      .prow .pdot {
+        width: 8px; height: 8px; border-radius: 50%; flex: none;
+        background: color-mix(in srgb, var(--primary-text-color) 25%, transparent);
+      }
+      .prow .pdot.on { background: ${GA_BADGE}; }
+      .prow .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .prow .pstate { font-size: 12px; color: var(--secondary-text-color); }
+      .pnone { font-size: 13px; color: var(--secondary-text-color); padding: 4px 2px; }
+      .pnote {
+        margin-top: 10px; font-size: 12px; line-height: 1.4;
+        color: var(--secondary-text-color); opacity: .75;
+      }
+      @keyframes ga-fade { from { opacity: 0 } to { opacity: 1 } }
 
       .empty {
         display: flex; align-items: center; gap: 8px; padding: 18px 4px;
@@ -915,9 +1284,9 @@ class GlanceAreasCard extends HTMLElement {
 
       @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
       @media (max-width: 420px) {
-        .tile { padding: 14px; }
-        .name { font-size: 20px; }
-        .aicon { --mdc-icon-size: 30px; }
+        .tile { padding: 10px 10px 6px; }
+        .name { font-size: 18px; }
+        .aicon { --mdc-icon-size: 28px; }
       }
     `;
   }
