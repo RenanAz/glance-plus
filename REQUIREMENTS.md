@@ -89,7 +89,10 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 25 | 2026-11-19 | Development moved to the **test instance** (192.168.70.103): dashboard `home-test` (HomeTest, views Home/Lab/Wide) with mock covers, lights, climate, doors/windows and temp/humidity. |
 | 26 | 2026-11-20 | Visual pass: tighter tile padding, smaller name/readout/power, bigger circle icons, door/window as round corner nubs with floating badges, borderless chevron on the bottom rail. |
 | 27 | 2026-11-20 | Phase 2: open panel is one column, spans measured content height in 96 px rows; siblings are mini-tiles with door/window/lights bubbles; retarget and `Esc` keep exactly one open. |
-| 28 | 2026-11-20 | Timer pauses preserve the remaining time; only a real interaction resets it. `focus` on a circle opens the panel (the more-info stand-in is gone). |
+| 28 | 2026-11-20 | Timer pauses preserve the remaining time; only a real interaction resets it. `focus` on a circle expands the panel (the more-info stand-in is gone). |
+| 29 | 2026-11-21 | Supersedes 28: circles never expand. `auto` = more-info for a single entity, turn-off for a multi switch/light set. Expand is icon / name / chevron only. |
+| 30 | 2026-11-21 | Supersedes D4: the tab opens in place and the detail block spans the full card width right after the expanded row; everything below is pushed down in order. Header 120, mini 90, gap 6. |
+| 31 | 2026-11-21 | Panel renders `controls[]` plates with their `downstream` chips (hierarchy-area parity); auto areas list their registry switches/lights. |
 
 ## 7. Open questions
 

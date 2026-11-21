@@ -642,6 +642,13 @@ mini rows as its content needs (3–10, measured), siblings reflow around it wit
 matrix is unit-tested (pause/resume keeps the remaining time). Phase 3 replaces
 the placeholder panel body.
 
+**Revised 2026-11-21 (mockup re-read, §14 #22):** the expanded tile opens **in
+place**: its header keeps the grid cell, the tiles on that row stay beside it as
+minis, and the detail is a **full-width block inserted right after that row**,
+pushing the remaining minis down in order. Header 120 px, mini 90 px, open gap 6.
+The panel body now renders openings plus the hierarchy-area `controls[]` bundles
+(upstream plate + downstream chips).
+
 ### Phase 3 — Panel contents (3–4 days)
 
 FR-15 … FR-19, FR-22 detail sections of the editor.
@@ -761,3 +768,7 @@ and compare against the two renders each phase.
 | 19 | 2026-11-20 | Tile chrome tightened per review: padding 12, gap 10, name 20 px, readout 14 px, power 13 px, circle icon 23 px, thinner ring. Door/window are 34 px round nubs parked in the bottom corners with the same floating count badge; the chevron lost its outline and sits on the bottom rail. |
 | 20 | 2026-11-20 | Phase 2 built: one open panel at a time, siblings become 96 px mini-tiles with `grid-auto-flow: dense`, panel spans 3–10 measured 96 px rows, `Esc` collapses and returns focus. `focus` on a circle now opens the panel (more-info debt resolved). |
 | 21 | 2026-11-20 | Timer pauses keep the **remaining** time (focus/hidden tab); a full reset happens only on interaction. Tab-visibility and card-rebuild `focusout` no longer restart the countdown. |
+| 22 | 2026-11-21 | **D4 superseded.** The expanded tile is a tab that opens in place: the header keeps its grid cell, the tiles on its row stay beside it as minis, the **detail block spans the full card width** immediately after that row, and everything below is pushed down in order. |
+| 23 | 2026-11-21 | A circle never expands the tile. `auto` behaviour = shortcut (more-info) for a single entity, turn-off for a multi switch/light set; explicit `more_info` / `toggle_off` / `none` still win. Expand only from the area icon, the name or the chevron. |
+| 24 | 2026-11-21 | Panel renders hierarchy-area's bundle: declared `controls[]` become plates with their `downstream` devices as child chips; a device declared as a downstream is never drawn twice. Without `controls`, the area's registry switches/lights are listed. |
+| 25 | 2026-11-21 | Open-grid spacing tightened: gap 6, mini 90, expanded header 120. |

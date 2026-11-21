@@ -12,6 +12,7 @@ const fakeClearTimeout = (id) => { if (id && timerQueue[id - 1]) timerQueue[id -
 class HTMLElement {
   constructor() {
     this.style = {};
+    this._events = [];
     this.shadowRoot = {
       innerHTML: "", addEventListener() {},
       querySelector: () => null,
@@ -21,6 +22,10 @@ class HTMLElement {
   }
   attachShadow() {
     return this.shadowRoot;
+  }
+  dispatchEvent(ev) {
+    this._events.push(ev);
+    return true;
   }
 }
 const doc = {
@@ -433,8 +438,11 @@ const html = (c) => c.shadowRoot.innerHTML;
   const txt = html(c);
   ok(txt.includes('class="mini-body"'), "mini body is rendered for the morph");
   ok(txt.includes("mini-id") && txt.includes("bubbles"), "mini-tile has identity + bubbles");
-  ok(txt.includes("pbody") && txt.includes("Openings"), "panel body placeholder is rendered");
-  ok(txt.includes("Spots, groups and bundles"), "phase 3 note is present");
+  ok(txt.includes('<div class="detail">'), "detail block is a sibling of the tiles");
+  const body = c._panelBody(m);
+  ok(body.includes("Openings"), "panel body renders the openings section");
+  ok(body.includes("Switches &amp; devices"), "panel body renders the switch plates");
+  ok(body.includes('data-ctl="switch.sala_lampada"'), "plate carries its control entity");
   ok(txt.includes('aria-expanded="false"'), "collapsed tiles are marked collapsed");
 }
 
@@ -445,8 +453,40 @@ const html = (c) => c.shadowRoot.innerHTML;
   c._render();
   const txt = html(c);
   ok(txt.includes('class="tile open"'), "open tile renders the expanded class");
-  ok(txt.includes("--span:3") && txt.includes("height:800px"), "open tile carries its row span and height");
+  ok(!txt.includes("--span"), "open tile no longer spans rows (detail is a sibling)");
   c._open = null;
+}
+
+// ---- circle behaviour: never expands --------------------------------------
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }] });
+  c._events = [];
+  c._circleClick({ dataset: { circle: "covers", area: "sala" } });
+  ok(c._open === null, "a circle tap never expands the tile");
+  ok(c._events.some((e) => e.type === "hass-more-info" && e.detail.entityId === "cover.sala"),
+    "multi-entity cover circle is a shortcut to more-info");
+}
+
+{
+  const onStates = { ...states, "light.cozinha": st("on") };
+  const c = new ctx.GlanceAreasCard();
+  c.setConfig({ floor: "first", areas: [{ area: "cozinha" }] });
+  c.hass = { ...hass, states: onStates };
+  c._events = [];
+  calls.length = 0;
+  c._circleClick({ dataset: { circle: "lights", area: "cozinha" } });
+  ok(c._open === null, "a single-entity lights circle does not expand either");
+  ok(calls.length === 0 && c._events.some((e) => e.type === "hass-more-info"),
+    "single-entity lights circle is a shortcut, not a toggle");
+}
+
+{
+  const c = make({ floor: "first", areas: [{ area: "sala" }] });
+  calls.length = 0;
+  c._circleClick({ dataset: { circle: "lights", area: "sala" } });
+  ok(calls.length > 0 && calls[0].service === "turn_off",
+    "multi-switch lights circle turns the holders off");
 }
 
 console.log("\nall glance-areas checks passed");

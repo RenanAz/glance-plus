@@ -46,7 +46,7 @@ const GA_CIRCLE_LABEL = {
 };
 
 const GA_CIRCLE_TYPES = ["climate", "covers", "lights"];
-const GA_DEFAULT_CIRCLES = GA_CIRCLE_TYPES.map((type) => ({ type, behavior: "focus" }));
+const GA_DEFAULT_CIRCLES = GA_CIRCLE_TYPES.map((type) => ({ type, behavior: "auto" }));
 
 // FR-09 — icon follows state. Unknown state → neutral domain glyph.
 const GA_MORPH = {
@@ -145,9 +145,11 @@ function gaCircles(raw) {
       continue;
     }
     if (out.some((x) => x.type === type)) continue;
+    // "focus" was the Phase 1 name for "auto": it never expands the tile.
+    const raw = c.behavior === "focus" ? "auto" : c.behavior;
     out.push({
       type,
-      behavior: ["focus", "toggle_off", "none"].includes(c.behavior) ? c.behavior : "focus",
+      behavior: ["auto", "more_info", "toggle_off", "none"].includes(raw) ? raw : "auto",
       confirm: c.confirm === true,
       hold: c.hold === true ? true : c.hold === false ? false : "auto",
       include: GA_ARR(c.include).map(GA_STR).filter(Boolean),
@@ -294,6 +296,8 @@ class GlanceAreasCard extends HTMLElement {
     this._visPaused = false;
     this._remaining = null;
     this._deadline = 0;
+    this._holdFired = false;
+    this._holdT = null;
     this._onVis = () => this._visibility();
     this.shadowRoot.addEventListener("click", (ev) => this._click(ev));
     this.shadowRoot.addEventListener("keydown", (ev) => this._key(ev));
@@ -306,7 +310,13 @@ class GlanceAreasCard extends HTMLElement {
       if (ev.relatedTarget && this.shadowRoot.contains(ev.relatedTarget)) return;
       this._focusPause(false);
     });
-    this.shadowRoot.addEventListener("pointerdown", () => this._bumpTimer());
+    this.shadowRoot.addEventListener("pointerdown", (ev) => {
+      this._bumpTimer();
+      this._down(ev);
+    });
+    for (const t of ["pointerup", "pointercancel", "pointerleave"]) {
+      this.shadowRoot.addEventListener(t, () => this._up());
+    }
     this.shadowRoot.addEventListener("input", () => this._bumpTimer());
     this.shadowRoot.addEventListener("change", () => this._bumpTimer());
   }
@@ -539,6 +549,7 @@ class GlanceAreasCard extends HTMLElement {
     }
 
     const openings = this._openings(entry, bucket, h);
+    const controls = this._panelControls(entry, bucket);
     const doorCount = openings.doors.filter((o) => o.open).length;
     const winCount = openings.windows.filter((o) => o.open).length;
     const lightsCircle = circles.find((c) => c.type === "lights");
@@ -558,6 +569,7 @@ class GlanceAreasCard extends HTMLElement {
       watts,
       power: gaPower(watts, this._lang()),
       circles,
+      controls,
       doors: doorCount,
       windows: winCount,
       doorList: openings.doors,
@@ -565,6 +577,44 @@ class GlanceAreasCard extends HTMLElement {
       bubbles,
       open: this._open === entry.area,
     };
+  }
+
+  // Declared controls become the panel's switch plates; without them, list the
+  // area's registry switches/lights so the panel is never empty.
+  _panelControls(entry, bucket) {
+    const h = this._hass;
+    const info = (id) => {
+      const st = h && h.states ? h.states[id] : null;
+      const dom = id.split(".")[0];
+      const attrs = (st && st.attributes) || {};
+      const state = st ? st.state : "";
+      return {
+        id,
+        dom,
+        on: state === "on",
+        name: attrs.friendly_name || id.split(".")[1],
+        icon: attrs.icon ||
+          (GA_MORPH[dom] && GA_MORPH[dom][state]) ||
+          GA_CIRCLE_ICON[dom] ||
+          "mdi:light-switch",
+      };
+    };
+    if (entry.controls.length) {
+      // A device declared as someone's downstream is rendered as a child chip,
+      // never twice as its own plate.
+      const child = new Set();
+      for (const c of entry.controls) for (const d of c.downstream) child.add(d);
+      return entry.controls
+        .filter((c) => !child.has(c.entity))
+        .map((c) => ({
+          entity: c.entity,
+          hold: c.hold,
+          info: info(c.entity),
+          kids: c.downstream.map(info),
+        }));
+    }
+    const pool = (bucket.all || []).filter((id) => /^(switch|light|fan)\./.test(id));
+    return pool.slice(0, 8).map((id) => ({ entity: id, hold: true, info: info(id), kids: [] }));
   }
 
   _firstByClass(ids, deviceClass) {
@@ -641,6 +691,7 @@ class GlanceAreasCard extends HTMLElement {
       confirm: circle.confirm,
       count,
       icon,
+      single: members.length === 1,
       color: GA_DOMAIN_COLOR[circle.type === "covers" ? "cover" : circle.type] || GA_ACCENT,
       first: members[0] || null,
       members,
@@ -722,7 +773,7 @@ class GlanceAreasCard extends HTMLElement {
         GA_ESC(msg) + "</span></div>";
     } else {
       body = '<div class="grid' + (this._open ? " open" : "") + '" role="list">' +
-        model.map((a) => this._tile(a)).join("") + "</div>";
+        model.map((a) => this._tile(a)).join("") + '<div class="detail"></div></div>';
     }
 
     const hints = [];
@@ -736,8 +787,15 @@ class GlanceAreasCard extends HTMLElement {
       "<style>" + this._css() + "</style>" +
       '<div class="card" style="--cols:' + cfg.columns + ";--th:" + cfg.tile_height + 'px">' +
       head + body + warn + "</div>";
-    // The open panel is measured after it exists, so a rebuild keeps its size.
-    this._sizeOpen();
+    // A rebuild while open must re-fill and re-place the detail block.
+    if (this._open) {
+      const entry = this._entryFor(this._open);
+      if (entry) {
+        const model2 = this._areaModel(entry);
+        this._fillDetail(model2);
+        this._placeDetail();
+      }
+    }
   }
 
   _tile(a) {
@@ -770,17 +828,14 @@ class GlanceAreasCard extends HTMLElement {
         '<span class="mname">' + name + "</span></div>" +
       "</div>";
 
-    const cls = "tile" + (a.open ? " open" : "");
-    const span = this._cfg.expand.span;
-    const th = this._cfg.tile_height;
-    const style = "style=\"--ac:" + GA_ESC(a.accent) +
-      (a.open ? ";--span:" + span + ";height:" + (th * span + 10 * (span - 1)) + "px" : "") + '"';
+    const cls = "tile" + (a.open ? " open" : this._open ? " mini" : "");
+    const style = 'style="--ac:' + GA_ESC(a.accent) + '"';
 
     return (
       '<div class="' + cls + '" role="listitem" tabindex="0" data-area="' + GA_ESC(a.id) + '" ' + style +
         ' aria-expanded="' + (a.open ? "true" : "false") + '">' +
-        '<div class="top" data-toggle>' +
-          '<ha-icon class="aicon" icon="' + GA_ESC(a.icon) + '"></ha-icon>' +
+        '<div class="top">' +
+          '<ha-icon class="aicon" data-toggle icon="' + GA_ESC(a.icon) + '"></ha-icon>' +
           '<div class="readout">' + line1 + line2 + "</div>" +
         "</div>" +
         '<div class="name" data-toggle title="' + name + '">' + name + "</div>" +
@@ -791,23 +846,60 @@ class GlanceAreasCard extends HTMLElement {
           '<ha-icon icon="mdi:chevron-down"></ha-icon></button>' +
         winNub +
         mini +
-        this._panel(a) +
       "</div>"
     );
   }
 
-  // Phase 2 shell: the real detail stack (spots, groups, bundles) is Phase 3.
-  _panel(a) {
+  // Full-width detail block, inserted after the expanded tile's row.
+  _panelBody(a) {
+    const strip = [];
+    if (a.temp != null && a.hum != null) strip.push(GA_ESC(a.temp) + "° · " + GA_ESC(a.hum) + "%");
+    else if (a.temp != null) strip.push(GA_ESC(a.temp) + "°");
+    else if (a.hum != null) strip.push(GA_ESC(a.hum) + "%");
+    const power = a.power != null
+      ? '<span class="sp"><ha-icon icon="mdi:lightning-bolt"></ha-icon>' + GA_ESC(a.power) + "</span>"
+      : "";
+    const sensors = strip.length ? '<span class="st">' + strip.join("") + "</span>" : "";
+
+    const plates = a.controls.map((c) => this._plate(c)).join("");
+
     const opening = (o) =>
-      '<div class="prow"><span class="pdot' + (o.open ? " on" : "") + '"></span>' +
+      '<div class="orow"><span class="pdot' + (o.open ? " on" : "") + '"></span>' +
       '<span class="pname">' + GA_ESC(o.name) + "</span>" +
       '<span class="pstate">' + (o.open ? "open" : "closed") + "</span></div>";
-    const all = [...a.doorList, ...a.windowList];
+    const openings = [...a.doorList, ...a.windowList];
+
     return (
-      '<div class="pbody">' +
-        '<div class="psec">Openings</div>' +
-        (all.length ? all.map(opening).join("") : '<div class="pnone">No doors or windows.</div>') +
-        '<div class="pnote">Spots, groups and bundles arrive in phase 3.</div>' +
+      '<div class="dwrap">' +
+        '<div class="strip">' + sensors + power + "</div>" +
+        (plates ? '<div class="dsec">Switches &amp; devices</div><div class="plates">' + plates + "</div>" : "") +
+        (openings.length
+          ? '<div class="dsec">Openings</div><div class="plates">' + openings.map(opening).join("") + "</div>"
+          : "") +
+      "</div>"
+    );
+  }
+
+  // hierarchy-area's bundle, re-styled: upstream rocker + its downstream devices.
+  _plate(c) {
+    const on = c.info.on || c.kids.some((k) => k.on);
+    const kids = c.kids.length
+      ? '<div class="kids">' + c.kids.map((k) =>
+          '<button class="kid' + (k.on ? " on" : "") + '" type="button" data-ctl="' + GA_ESC(k.id) + '"' +
+          ' aria-label="' + GA_ESC(k.name) + '">' +
+          '<ha-icon icon="' + GA_ESC(k.icon) + '"></ha-icon>' +
+          '<span>' + GA_ESC(k.name) + "</span></button>"
+        ).join("") + "</div>"
+      : "";
+    return (
+      '<div class="plate' + (on ? " on" : "") + '">' +
+        '<button class="rock" type="button" data-ctl="' + GA_ESC(c.entity) + '"' +
+          ' aria-label="' + GA_ESC(c.info.name) + '">' +
+          '<ha-icon icon="' + GA_ESC(c.info.icon) + '"></ha-icon>' +
+          '<span class="rname">' + GA_ESC(c.info.name) + "</span>" +
+          '<span class="rstate">' + GA_ESC(c.info.on ? "on" : "off") + "</span>" +
+        "</button>" +
+        kids +
       "</div>"
     );
   }
@@ -819,8 +911,10 @@ class GlanceAreasCard extends HTMLElement {
     if (c.type === "climate") aria = label + ": " + (n ? n + " active" : "all off");
     else if (c.type === "covers") aria = label + ": " + (n ? n + " not closed" : "all closed");
     else aria = label + ": " + (n ? n + " on" : "all off");
-    if (c.behavior === "toggle_off") aria += ". Turn off";
-    else if (c.behavior === "focus") aria += ". Details";
+    const turnOff = c.behavior === "toggle_off" ||
+      (c.behavior === "auto" && !c.single && c.type === "lights");
+    if (turnOff) aria += ". Turn off";
+    else if (c.behavior !== "none") aria += ". Details";
     const badge = n > 0 ? '<span class="badge">' + n + "</span>" : "";
     const cls = "circ" + (n > 0 ? " on" : "") + (c.behavior === "toggle_off" ? " act" : "");
     return (
@@ -871,11 +965,40 @@ class GlanceAreasCard extends HTMLElement {
     if (focus) this._focusTile(id);
   }
 
+  _entryFor(id) {
+    return (this._cfg.areas || []).find((a) => a.area === id) ||
+      this._resolvedAreas().find((a) => a.area === id) || null;
+  }
+
+  _fillDetail(model) {
+    const d = this.shadowRoot.querySelector(".detail");
+    if (!d || !model) return;
+    d.dataset.for = model.id;
+    d.setAttribute("aria-label", model.name + " details");
+    d.classList.add("open");
+    d.innerHTML = this._panelBody(model);
+  }
+
+  // Insert the detail right after the expanded tile's row, so the tiles on that
+  // row keep their place and everything below is pushed down in order.
+  _placeDetail() {
+    const grid = this.shadowRoot.querySelector(".grid");
+    if (!grid || !this._open) return;
+    const detail = grid.querySelector(".detail");
+    if (!detail) return;
+    const tiles = [...grid.querySelectorAll(".tile")];
+    const idx = tiles.findIndex((t) => t.dataset.area === this._open);
+    if (idx < 0) return;
+    const cols = this._cfg.columns;
+    const rowEnd = Math.min(tiles.length, Math.floor(idx / cols) * cols + cols);
+    grid.insertBefore(detail, tiles[rowEnd] || null);
+  }
+
   // Class/style flips only: the card's DOM is never rebuilt for a morph.
   _applyExpansion(mode) {
     const grid = this.shadowRoot.querySelector(".grid");
     if (!grid) return;
-    const th = this._cfg.tile_height;
+    const detail = grid.querySelector(".detail");
     if (this._morphT) {
       clearTimeout(this._morphT);
       this._morphT = null;
@@ -893,50 +1016,23 @@ class GlanceAreasCard extends HTMLElement {
         chev.setAttribute("aria-label", (isOpen ? "Collapse " : "Expand ") + (nm ? nm.textContent : "area"));
       }
       if (isOpen) {
-        if (!wasOpen) {
-          t.style.height = th + "px";
-          void t.offsetHeight; // force a start value so the height animates
-        }
         t.classList.add("open");
-        this._sizeOpen(t);
       } else if (wasOpen) {
-        if (mode === "collapse") {
-          // Hold the row span until the shrink finishes, or the tile would
-          // overlap the rows below for 220 ms.
-          t.classList.add("leaving");
-          t.style.height = th + "px";
-          this._morphT = setTimeout(() => {
-            if (this._open !== t.dataset.area) {
-              t.classList.remove("open", "leaving");
-              t.style.height = "";
-            }
-            this._morphT = null;
-            const g = this.shadowRoot.querySelector(".grid");
-            if (g) g.classList.toggle("open", !!this._open || !!g.querySelector(".leaving"));
-          }, 240);
-        } else {
-          t.classList.remove("open", "leaving");
-          t.style.height = "";
-        }
-      } else {
-        t.style.height = "";
-        t.classList.remove("leaving");
+        t.classList.remove("open");
       }
     }
-  }
-
-  // The open panel spans as many 96 px mini rows as its content needs (clamped
-  // 3..10), so the panel tracks the detail stack instead of a fixed 3 rows.
-  _sizeOpen(tile) {
-    const t = tile || this.shadowRoot.querySelector(".tile.open");
-    if (!t) return;
-    const MINI = 96;
-    const GAP = 10;
-    const pb = t.querySelector(".pbody");
-    const need = (pb ? pb.offsetTop + pb.scrollHeight : 118) + 8;
-    const span = Math.max(3, Math.min(10, Math.ceil((need + GAP) / (MINI + GAP))));
-    t.style.setProperty("--span", String(span));
-    t.style.height = span * MINI + (span - 1) * GAP + "px";
+    if (this._open) {
+      const entry = this._entryFor(this._open);
+      const model = entry ? this._areaModel(entry) : null;
+      if (detail && model) {
+        this._fillDetail(model);
+        this._placeDetail();
+      }
+    } else if (detail) {
+      detail.classList.remove("open");
+      detail.removeAttribute("data-for");
+      detail.innerHTML = "";
+    }
   }
 
   _focusTile(id) {
@@ -1037,6 +1133,15 @@ class GlanceAreasCard extends HTMLElement {
   // ---- interaction --------------------------------------------------------
 
   _click(ev) {
+    const ctl = ev.target.closest ? ev.target.closest("[data-ctl]") : null;
+    if (ctl) {
+      if (this._holdFired) {
+        this._holdFired = false;
+        return;
+      }
+      this._toggleEntity(ctl.dataset.ctl);
+      return;
+    }
     const btn = ev.target.closest ? ev.target.closest("[data-circle]") : null;
     if (btn) {
       this._circleClick(btn);
@@ -1048,11 +1153,27 @@ class GlanceAreasCard extends HTMLElement {
     if (tile) this._toggle(tile.dataset.area);
   }
 
+  // Long-press a switch/light plate to open its more-info instead of toggling.
+  _down(ev) {
+    const b = ev.target.closest ? ev.target.closest("[data-ctl]") : null;
+    if (!b) return;
+    this._holdFired = false;
+    clearTimeout(this._holdT);
+    this._holdT = setTimeout(() => {
+      this._holdFired = true;
+      this._more(b.dataset.ctl);
+    }, 550);
+  }
+
+  _up() {
+    clearTimeout(this._holdT);
+    this._holdT = null;
+  }
+
   _circleClick(btn) {
     const type = btn.dataset.circle;
     const areaId = btn.dataset.area;
-    const entry = (this._cfg.areas || []).find((a) => a.area === areaId) ||
-      this._resolvedAreas().find((a) => a.area === areaId);
+    const entry = this._entryFor(areaId);
     if (!entry) return;
     const circle = (entry.circles || []).find((c) => c.type === type);
     if (!circle) return;
@@ -1061,13 +1182,32 @@ class GlanceAreasCard extends HTMLElement {
     if (!cm) return;
 
     if (circle.behavior === "none") return;
-    if (circle.behavior === "focus") {
-      // No groups yet (Phase 3), so focus == open the area's panel.
-      if (this._open === areaId) this._bumpTimer();
-      else this._expand(areaId);
+    // A circle never expands the tile. It is a shortcut when it points at one
+    // entity, and a turn-off switch when it is a group of switches/lights.
+    const turnOff = circle.behavior === "toggle_off" ||
+      (circle.behavior === "auto" && !cm.single && cm.type === "lights");
+    if (turnOff) {
+      this._turnOff(cm.active);
       return;
     }
-    if (circle.behavior === "toggle_off") this._turnOff(cm.active);
+    const target = cm.active[0] || cm.members[0] || null;
+    if (target) this._more(target);
+  }
+
+  _more(entityId) {
+    if (!entityId) return;
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", {
+        detail: { entityId },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _toggleEntity(entityId) {
+    if (!this._hass || !this._hass.callService) return;
+    this._hass.callService("homeassistant", "toggle", { entity_id: entityId });
   }
 
   _turnOff(ids) {
@@ -1103,13 +1243,13 @@ class GlanceAreasCard extends HTMLElement {
       .grid {
         display: grid;
         grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
-        grid-auto-rows: var(--th, 260px);
-        grid-auto-flow: dense;
+        grid-auto-rows: auto;
+        grid-auto-flow: row;
+        align-items: start;
         gap: 10px;
       }
-      /* While a panel is open, rows are mini-tile height so the siblings pack
-         tightly beside it. The panel spans however many rows it needs. */
-      .grid.open { grid-auto-rows: 96px; }
+      /* Minis pack tighter than full tiles while a panel is open. */
+      .grid.open { gap: 6px; }
 
       .tile {
         position: relative; display: flex; flex-direction: column;
@@ -1123,7 +1263,6 @@ class GlanceAreasCard extends HTMLElement {
                     background .12s ease, border-color .12s ease;
       }
       .tile:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-      .tile.open, .tile.leaving { grid-row: span var(--span, 3); }
       .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; min-height: 34px; }
       .aicon {
         --mdc-icon-size: 32px; color: var(--primary-text-color); opacity: .92; flex: none;
@@ -1209,68 +1348,112 @@ class GlanceAreasCard extends HTMLElement {
 
       /* ---- mini-tile (FR-21) ------------------------------------------- */
       .mini-body { display: none; height: 100%; min-width: 0; }
-      .tile.mini { height: 96px !important; padding: 10px 12px; border-radius: 18px; }
+      .tile.mini { height: 90px !important; padding: 8px 10px; border-radius: 16px; }
       .tile.mini > .top,
       .tile.mini > .name,
       .tile.mini > .circles,
       .tile.mini > .nub,
       .tile.mini > .chev,
-      .tile.mini > .pbody { display: none; }
+      .tile.mini > .detail { display: none; }
       .tile.mini .mini-body {
-        display: flex; flex-direction: column; justify-content: space-between; gap: 6px;
+        display: flex; flex-direction: column; justify-content: space-between; gap: 4px;
       }
-      .bubbles { display: flex; gap: 6px; min-height: 22px; }
+      .bubbles { display: flex; gap: 5px; min-height: 20px; }
       .bubble {
-        display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px;
-        border-radius: 11px; font-size: 11px; font-variant-numeric: tabular-nums;
+        display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 6px;
+        border-radius: 10px; font-size: 11px; font-variant-numeric: tabular-nums;
         color: var(--secondary-text-color);
         background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
         border: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
       }
-      .bubble ha-icon { --mdc-icon-size: 13px; }
+      .bubble ha-icon { --mdc-icon-size: 12px; }
       .bubble b { color: ${GA_BADGE}; font-weight: 600; }
-      .mini-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
-      .mini-id .aicon { --mdc-icon-size: 22px; }
+      .mini-id { display: flex; align-items: center; gap: 7px; min-width: 0; }
+      .mini-id .aicon { --mdc-icon-size: 21px; }
       .mname {
-        font-size: 16px; font-weight: 600; line-height: 1.15;
+        font-size: 15px; font-weight: 600; line-height: 1.15;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
 
-      /* ---- expanded panel shell (FR-12/13) ------------------------------ */
+      /* ---- expanded header (the tab) ------------------------------------ */
+      .tile.open {
+        height: 120px !important;
+        border-color: color-mix(in srgb, var(--ac, #818cf8) 35%, transparent);
+        background: color-mix(in srgb, var(--ac, #818cf8) 9%, rgba(255, 255, 255, .05));
+      }
       .tile.open .circles, .tile.open .nub { display: none; }
       .tile.open .chev {
         top: auto; bottom: 6px; cursor: pointer;
         transform: translateX(-50%) rotate(180deg);
       }
-      .pbody {
-        display: none; margin-top: 14px; padding-top: 10px;
-        border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 9%, transparent);
-        overflow: auto;
+
+      /* ---- full-width detail block -------------------------------------- */
+      .detail { display: none; grid-column: 1 / -1; min-width: 0; }
+      .detail.open { display: block; animation: ga-fade .16s ease; }
+      .dwrap { display: flex; flex-direction: column; gap: 8px; }
+      .strip {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        min-height: 38px; padding: 0 12px; border-radius: 14px;
+        background: rgba(255, 255, 255, .05);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 7%, transparent);
+        font-size: 14px; font-variant-numeric: tabular-nums;
       }
-      .tile.open .pbody { display: block; padding-bottom: 34px; animation: ga-fade .18s ease; }
-      .psec {
-        font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-        color: var(--secondary-text-color); opacity: .8; margin-bottom: 6px;
+      .strip .sp { display: inline-flex; align-items: center; gap: 2px; color: var(--secondary-text-color); }
+      .strip .sp ha-icon { --mdc-icon-size: 14px; }
+      .dsec {
+        font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+        color: var(--secondary-text-color); opacity: .75; margin: 2px 1px 0;
       }
-      .prow {
-        display: flex; align-items: center; gap: 8px; min-height: 30px;
-        padding: 2px 8px; border-radius: 8px;
+      .plates { display: flex; flex-direction: column; gap: 6px; }
+      .plate {
+        border-radius: 12px; overflow: hidden;
+        background: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+      }
+      .rock {
+        display: flex; align-items: center; gap: 10px; width: 100%;
+        min-height: 42px; padding: 0 12px;
+        font: inherit; font-size: 14px; text-align: left;
+        color: var(--primary-text-color); background: none; border: 0; cursor: pointer;
+      }
+      .rock ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); flex: none; }
+      .plate.on .rock ha-icon { color: ${GA_BADGE}; }
+      .rock .rname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .rock .rstate { font-size: 12px; color: var(--secondary-text-color); }
+      .plate.on .rock .rstate { color: ${GA_BADGE}; }
+      .kids {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        padding: 0 10px 9px; margin-top: -4px;
+      }
+      .kid {
+        display: inline-flex; align-items: center; gap: 5px;
+        min-height: 28px; padding: 0 10px; border-radius: 14px;
+        font: inherit; font-size: 12.5px;
+        color: var(--secondary-text-color);
+        background: color-mix(in srgb, var(--primary-text-color) 5%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+        cursor: pointer;
+      }
+      .kid ha-icon { --mdc-icon-size: 15px; }
+      .kid.on {
+        color: var(--primary-text-color);
+        border-color: color-mix(in srgb, ${GA_BADGE} 45%, transparent);
+        background: color-mix(in srgb, ${GA_BADGE} 14%, transparent);
+      }
+      .orow {
+        display: flex; align-items: center; gap: 8px; min-height: 34px;
+        padding: 0 12px; border-radius: 12px;
         font-size: 13px; color: var(--primary-text-color);
         background: color-mix(in srgb, var(--primary-text-color) 4%, transparent);
-        margin-bottom: 4px;
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 8%, transparent);
       }
-      .prow .pdot {
+      .pdot {
         width: 8px; height: 8px; border-radius: 50%; flex: none;
         background: color-mix(in srgb, var(--primary-text-color) 25%, transparent);
       }
-      .prow .pdot.on { background: ${GA_BADGE}; }
-      .prow .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .prow .pstate { font-size: 12px; color: var(--secondary-text-color); }
-      .pnone { font-size: 13px; color: var(--secondary-text-color); padding: 4px 2px; }
-      .pnote {
-        margin-top: 10px; font-size: 12px; line-height: 1.4;
-        color: var(--secondary-text-color); opacity: .75;
-      }
+      .pdot.on { background: ${GA_BADGE}; }
+      .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pstate { font-size: 12px; color: var(--secondary-text-color); }
       @keyframes ga-fade { from { opacity: 0 } to { opacity: 1 } }
 
       .empty {
