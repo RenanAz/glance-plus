@@ -17,7 +17,7 @@
  * https://github.com/RenanAz/glance-plus
  */
 
-const VERSION = "0.1.0";
+const VERSION = "0.3.0";
 
 // ---- visual tokens (PLAN §8, mockup-measured) -----------------------------
 const GA_TILE_H = 260;
@@ -93,6 +93,17 @@ const GA_NUM = (st) => {
   const n = Number(st.state);
   return Number.isFinite(n) ? n : null;
 };
+
+// Compact age ladder: <1 min / 4 min / 3h / 2d.
+function gaAge(iso) {
+  const t = Date.parse(iso);
+  if (!t) return null;
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "<1 min";
+  if (s < 3600) return Math.floor(s / 60) + " min";
+  if (s < 86400) return Math.floor(s / 3600) + "h";
+  return Math.floor(s / 86400) + "d";
+}
 
 // One shared formatter per locale; HA passes e.g. `pt-PT`. A container Node may
 // ship without that locale's data, so fall back to a fixed decimal separator
@@ -199,6 +210,8 @@ function gaArea(raw) {
     humidity: GA_STR(a.humidity) || null,
     power: GA_STR(a.power && a.power.entity ? a.power.entity : a.power) || null,
     energy: GA_STR(a.energy && a.energy.entity ? a.energy.entity : a.energy) || null,
+    presence: GA_STR(a.presence && a.presence.entity ? a.presence.entity : a.presence) || null,
+    battery: GA_STR(a.battery && a.battery.entity ? a.battery.entity : a.battery) || null,
     climate: GA_STR(a.climate) || null,
     controls: gaControls(a.controls),
     circles: gaCircles(a.circles),
@@ -275,6 +288,30 @@ function gaAreaIndexOf(hass) {
   return map;
 }
 
+// One 60 s clock for every open panel on the page (presence ages).
+const GA_TICKERS = new Set();
+let GA_TICK = null;
+const GA_TICK_START = () => {
+  if (GA_TICK) return;
+  GA_TICK = setInterval(() => {
+    for (const el of GA_TICKERS) {
+      try {
+        if (!el._open) continue;
+        el._sig = "";
+        el._render();
+      } catch (e) {
+        /* one bad card must not stop the clock */
+      }
+    }
+  }, 60000);
+};
+const GA_TICK_STOP = () => {
+  if (!GA_TICKERS.size && GA_TICK) {
+    clearInterval(GA_TICK);
+    GA_TICK = null;
+  }
+};
+
 /* ------------------------------------------------------------------ *
  * Card
  * ------------------------------------------------------------------ */
@@ -346,10 +383,14 @@ class GlanceAreasCard extends HTMLElement {
 
   connectedCallback() {
     document.addEventListener("visibilitychange", this._onVis);
+    GA_TICKERS.add(this);
+    GA_TICK_START();
   }
 
   disconnectedCallback() {
     document.removeEventListener("visibilitychange", this._onVis);
+    GA_TICKERS.delete(this);
+    GA_TICK_STOP();
     this._stopTimer();
     if (this._morphT) clearTimeout(this._morphT);
   }
@@ -534,6 +575,12 @@ class GlanceAreasCard extends HTMLElement {
     // A meter sitting at ~0 W is not a signal worth a line in a 225 px tile.
     if (watts != null && Math.round(Math.abs(watts)) === 0) watts = null;
 
+    const tempUnit = (h.config && h.config.unit_system && h.config.unit_system.temperature) || "°C";
+    const presence = this._presenceInfo(entry, bucket);
+    const battery = this._batteryInfo(entry, bucket);
+    const energyEnt = entry.energy;
+    const energyVal = energyEnt ? GA_NUM(h.states[energyEnt]) : null;
+
     const circles = [];
     // D11 is an area-level rule: a lamp holds only when the area has no switch
     // at all. Decide it over the whole control pool, not over a filtered circle.
@@ -566,6 +613,10 @@ class GlanceAreasCard extends HTMLElement {
       accent,
       temp: tempVal == null ? null : gaFormat(tempVal, 0, this._lang()),
       hum: humVal == null ? null : gaFormat(humVal, 0, this._lang()),
+      tempUnit,
+      presence,
+      battery,
+      energy: energyVal == null ? null : gaFormat(energyVal, 1, this._lang()) + " kWh",
       watts,
       power: gaPower(watts, this._lang()),
       circles,
@@ -625,6 +676,53 @@ class GlanceAreasCard extends HTMLElement {
       if (st && st.attributes && st.attributes.device_class === deviceClass) return id;
     }
     return null;
+  }
+
+  // Presence: explicit config wins, otherwise the area's only motion/presence
+  // sensor. `occupancy` is excluded — a pet-litter sensor is not a person.
+  _presenceInfo(entry, bucket) {
+    let id = entry.presence;
+    if (!id) {
+      const found = (bucket.all || []).filter((x) => {
+        if (!x.startsWith("binary_sensor.")) return false;
+        const st = this._hass.states[x];
+        const dc = st && st.attributes && st.attributes.device_class;
+        return dc === "motion" || dc === "presence";
+      });
+      if (found.length === 1) id = found[0];
+    }
+    if (!id) return null;
+    const st = this._hass.states[id];
+    if (!st || GA_DEAD.has(st.state)) return null;
+    const age = gaAge(st.last_changed);
+    if (!age) return null;
+    return { id, age };
+  }
+
+  // Battery: explicit config, else the area's numeric battery sensor (the
+  // `*_battery_plus` / `*_battery_low` helpers are skipped on purpose).
+  _batteryInfo(entry, bucket) {
+    let id = entry.battery;
+    if (!id) {
+      id = (bucket.all || []).find((x) => {
+        if (!x.startsWith("sensor.")) return false;
+        if (!/_battery$/.test(x)) return false;
+        const st = this._hass.states[x];
+        return st && st.attributes && st.attributes.device_class === "battery";
+      }) || null;
+    }
+    if (!id) return null;
+    const st = this._hass.states[id];
+    const pct = GA_NUM(st);
+    if (pct == null) return null;
+    const rounded = Math.min(100, Math.max(0, Math.round(pct)));
+    const charging = !!(st.attributes && (st.attributes.is_charging || st.attributes.battery_charging));
+    const level = Math.round(rounded / 10) * 10;
+    return {
+      id,
+      pct: rounded,
+      icon: charging ? "mdi:battery-charging" : (level >= 100 ? "mdi:battery" : "mdi:battery-" + level),
+    };
   }
 
   _circleMembers(circle, entry, bucket, reg) {
@@ -740,6 +838,9 @@ class GlanceAreasCard extends HTMLElement {
     for (const a of model) {
       parts.push(
         a.id, a.name, a.icon, a.temp, a.hum, a.power, a.doors, a.windows,
+        a.battery ? a.battery.pct + ":" + a.battery.icon : "-",
+        a.presence ? a.presence.age : "-",
+        a.energy || "-",
         a.circles.map((c) => c.type + ":" + c.count + ":" + c.icon).join(",")
       );
     }
@@ -852,14 +953,15 @@ class GlanceAreasCard extends HTMLElement {
 
   // Full-width detail block, inserted after the expanded tile's row.
   _panelBody(a) {
-    const strip = [];
-    if (a.temp != null && a.hum != null) strip.push(GA_ESC(a.temp) + "° · " + GA_ESC(a.hum) + "%");
-    else if (a.temp != null) strip.push(GA_ESC(a.temp) + "°");
-    else if (a.hum != null) strip.push(GA_ESC(a.hum) + "%");
+    const metrics = [];
+    if (a.temp != null) metrics.push(this._metric("mdi:thermometer", GA_ESC(a.temp) + GA_ESC(a.tempUnit)));
+    if (a.hum != null) metrics.push(this._metric("mdi:water-percent", GA_ESC(a.hum) + "%"));
+    if (a.presence) metrics.push(this._metric("mdi:walk", GA_ESC(a.presence.age)));
+    if (a.battery) metrics.push(this._metric(a.battery.icon, a.battery.pct + "%"));
+    const energy = a.energy ? "<i>(" + GA_ESC(a.energy) + ")</i>" : "";
     const power = a.power != null
-      ? '<span class="sp"><ha-icon icon="mdi:lightning-bolt"></ha-icon>' + GA_ESC(a.power) + "</span>"
+      ? '<span class="m pwr"><ha-icon icon="mdi:lightning-bolt"></ha-icon>' + GA_ESC(a.power) + energy + "</span>"
       : "";
-    const sensors = strip.length ? '<span class="st">' + strip.join("") + "</span>" : "";
 
     const plates = a.controls.map((c) => this._plate(c)).join("");
 
@@ -871,13 +973,17 @@ class GlanceAreasCard extends HTMLElement {
 
     return (
       '<div class="dwrap">' +
-        '<div class="strip">' + sensors + power + "</div>" +
+        '<div class="sub"><div class="sub-l">' + metrics.join("") + '</div><div class="sub-r">' + power + "</div></div>" +
         (plates ? '<div class="dsec">Switches &amp; devices</div><div class="plates">' + plates + "</div>" : "") +
         (openings.length
           ? '<div class="dsec">Openings</div><div class="plates">' + openings.map(opening).join("") + "</div>"
           : "") +
       "</div>"
     );
+  }
+
+  _metric(icon, text) {
+    return '<span class="m"><ha-icon icon="' + icon + '"></ha-icon>' + text + "</span>";
   }
 
   // hierarchy-area's bundle, re-styled: upstream rocker + its downstream devices.
@@ -1325,16 +1431,16 @@ class GlanceAreasCard extends HTMLElement {
 
       /* Bottom rail: door bottom-left, window bottom-right, chevron centred. */
       .nub {
-        position: absolute; bottom: 8px; width: 34px; height: 34px;
+        position: absolute; bottom: 6px; height: 28px; min-width: 44px; padding: 0 10px;
         display: inline-flex; align-items: center; justify-content: center;
-        border-radius: 50%; color: var(--secondary-text-color);
+        border-radius: 14px; color: var(--secondary-text-color);
         background: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
         border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
       }
       .nub.left { left: 12px; }
       .nub.right { right: 12px; }
-      .nub ha-icon { --mdc-icon-size: 17px; }
-      .nub .badge { top: -5px; right: -5px; }
+      .nub ha-icon { --mdc-icon-size: 16px; }
+      .nub .badge { top: -6px; right: -6px; }
 
       .chev {
         position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
@@ -1377,29 +1483,44 @@ class GlanceAreasCard extends HTMLElement {
 
       /* ---- expanded header (the tab) ------------------------------------ */
       .tile.open {
-        height: 120px !important;
+        height: 90px !important;
         border-color: color-mix(in srgb, var(--ac, #818cf8) 35%, transparent);
         background: color-mix(in srgb, var(--ac, #818cf8) 9%, rgba(255, 255, 255, .05));
       }
+      .tile.open .name {
+        order: -1; margin-top: 0; padding-right: 34px;
+        font-size: 21px;
+      }
+      .tile.open .top { margin-top: auto; min-height: 26px; }
       .tile.open .circles, .tile.open .nub { display: none; }
       .tile.open .chev {
-        top: auto; bottom: 6px; cursor: pointer;
-        transform: translateX(-50%) rotate(180deg);
+        top: 8px; right: 8px; left: auto; bottom: auto; cursor: pointer;
+        transform: rotate(180deg);
       }
 
       /* ---- full-width detail block -------------------------------------- */
       .detail { display: none; grid-column: 1 / -1; min-width: 0; }
       .detail.open { display: block; animation: ga-fade .16s ease; }
-      .dwrap { display: flex; flex-direction: column; gap: 8px; }
-      .strip {
-        display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        min-height: 38px; padding: 0 12px; border-radius: 14px;
-        background: rgba(255, 255, 255, .05);
-        border: 1px solid color-mix(in srgb, var(--primary-text-color) 7%, transparent);
-        font-size: 14px; font-variant-numeric: tabular-nums;
+      /* The detail reads as one container: an outline around the whole block. */
+      .dwrap {
+        display: flex; flex-direction: column; gap: 8px;
+        padding: 10px; border-radius: 16px;
+        background: color-mix(in srgb, var(--primary-text-color) 2.5%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
       }
-      .strip .sp { display: inline-flex; align-items: center; gap: 2px; color: var(--secondary-text-color); }
-      .strip .sp ha-icon { --mdc-icon-size: 14px; }
+      /* Metric subtitle: no box, icons inline, muted like a heading subtitle. */
+      .sub {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        min-height: 24px; padding: 0 2px;
+        font-size: 13px; font-variant-numeric: tabular-nums;
+        color: var(--secondary-text-color);
+      }
+      .sub-l { display: flex; align-items: center; gap: 12px; min-width: 0; flex-wrap: wrap; }
+      .sub-r { display: flex; align-items: center; gap: 6px; flex: none; }
+      .sub .m { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+      .sub .m ha-icon { --mdc-icon-size: 15px; opacity: .8; }
+      .sub .m i { font-style: normal; opacity: .7; margin-left: 2px; }
+      .sub-r .pwr { padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--primary-text-color) 14%, transparent); }
       .dsec {
         font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
         color: var(--secondary-text-color); opacity: .75; margin: 2px 1px 0;
@@ -1484,6 +1605,8 @@ function gaConfigDefaults() {
     humidity: null,
     power: null,
     energy: null,
+    presence: null,
+    battery: null,
     climate: null,
     controls: [],
     circles: gaCircles(null),
@@ -1892,6 +2015,15 @@ class GlanceAreasEditor extends HTMLElement {
       }, { includeDomains: ["sensor"], allowCustomEntity: true })),
       this._row("Power", this._picker("ha-entity-picker", a.power && a.power.entity, (v) => {
         this._setArea(i, "power", v ? { entity: v } : "");
+      }, { includeDomains: ["sensor"], allowCustomEntity: true })),
+      this._row("Energy", this._picker("ha-entity-picker", a.energy && a.energy.entity, (v) => {
+        this._setArea(i, "energy", v ? { entity: v } : "");
+      }, { includeDomains: ["sensor"], allowCustomEntity: true })),
+      this._row("Presence", this._picker("ha-entity-picker", a.presence, (v) => {
+        this._setArea(i, "presence", v);
+      }, { includeDomains: ["binary_sensor"], allowCustomEntity: true })),
+      this._row("Battery", this._picker("ha-entity-picker", a.battery, (v) => {
+        this._setArea(i, "battery", v);
       }, { includeDomains: ["sensor"], allowCustomEntity: true }))
     );
 

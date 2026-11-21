@@ -93,6 +93,10 @@ fixed grid that does not reflow and does not need one YAML block per entity.
 | 29 | 2026-11-21 | Supersedes 28: circles never expand. `auto` = more-info for a single entity, turn-off for a multi switch/light set. Expand is icon / name / chevron only. |
 | 30 | 2026-11-21 | Supersedes D4: the tab opens in place and the detail block spans the full card width right after the expanded row; everything below is pushed down in order. Header 120, mini 90, gap 6. |
 | 31 | 2026-11-21 | Panel renders `controls[]` plates with their `downstream` chips (hierarchy-area parity); auto areas list their registry switches/lights. |
+| 32 | 2026-11-21 | Detail block gets a container outline; the metric row is a borderless subtitle with icons for temp / humidity / presence age / battery and a divider before power + energy. |
+| 33 | 2026-11-21 | Slim tab 90 px: name on top, icon + readout at the bottom, chevron top-right. |
+| 34 | 2026-11-21 | Door/window back to the mockup pill with a suspended count badge, parked in the bottom corners. |
+| 35 | 2026-11-21 | v0.3.0 deployed to **prod** (live inline resource) on `home-test` → `OpenCode MVP`. |
 
 ## 7. Open questions
 

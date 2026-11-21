@@ -88,6 +88,8 @@ const entities = {
   "switch.sala_lampada": entity("switch.sala_lampada", "sala"),
   "switch.sala_config": entity("switch.sala_config", "sala", { entity_category: "config" }),
   "binary_sensor.porta_sala": entity("binary_sensor.porta_sala", "sala"),
+  "binary_sensor.sala_motion": entity("binary_sensor.sala_motion", "sala"),
+  "sensor.sala_battery": entity("sensor.sala_battery", "sala"),
   "binary_sensor.janela_sala": entity("binary_sensor.janela_sala", "sala"),
   "light.cozinha": entity("light.cozinha", "cozinha"),
 };
@@ -105,6 +107,8 @@ const states = {
   "switch.sala_lampada": st("on"),
   "switch.sala_config": st("on"),
   "binary_sensor.porta_sala": st("on", { device_class: "door" }),
+  "binary_sensor.sala_motion": { state: "off", attributes: { device_class: "motion" }, last_changed: new Date(Date.now() - 4 * 60000).toISOString() },
+  "sensor.sala_battery": st("70", { device_class: "battery" }),
   "binary_sensor.janela_sala": st("off", { device_class: "window" }),
   "light.cozinha": st("off"),
 };
@@ -441,6 +445,11 @@ const html = (c) => c.shadowRoot.innerHTML;
   ok(txt.includes('<div class="detail">'), "detail block is a sibling of the tiles");
   const body = c._panelBody(m);
   ok(body.includes("Openings"), "panel body renders the openings section");
+  ok(body.includes('icon="mdi:thermometer"') && body.includes("22°C"), "subtitle shows the temperature with unit + icon");
+  ok(body.includes('icon="mdi:water-percent"'), "subtitle shows humidity with an icon");
+  ok(body.includes('icon="mdi:walk"') && body.includes("4 min"), "subtitle shows presence age");
+  ok(body.includes('icon="mdi:battery-70"') && body.includes("70%"), "subtitle shows battery with a level icon");
+  ok(body.includes('class="m pwr"'), "power sits in the right-hand group of the subtitle");
   ok(body.includes("Switches &amp; devices"), "panel body renders the switch plates");
   ok(body.includes('data-ctl="switch.sala_lampada"'), "plate carries its control entity");
   ok(txt.includes('aria-expanded="false"'), "collapsed tiles are marked collapsed");
